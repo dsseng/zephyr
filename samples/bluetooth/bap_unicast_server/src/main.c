@@ -24,6 +24,7 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net_buf.h>
+#include <zephyr/settings/settings.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/printk.h>
@@ -737,6 +738,11 @@ int main(void)
 	if (err != 0) {
 		printk("Bluetooth init failed (err %d)\n", err);
 		return 0;
+	}
+
+	if (IS_ENABLED(CONFIG_SETTINGS)) {
+		 settings_load();
+		 printk("Settings loaded\n");
 	}
 
 	printk("Bluetooth initialized\n");
