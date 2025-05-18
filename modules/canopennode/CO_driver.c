@@ -9,6 +9,8 @@
 #include <zephyr/init.h>
 #include <zephyr/sys/util.h>
 
+#include <errno.h>
+
 #include <canopennode.h>
 
 #define LOG_LEVEL CONFIG_CANOPEN_LOG_LEVEL
@@ -264,7 +266,7 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule,
 	}
 
 	err = can_set_bitrate(CANmodule->dev, KHZ(CANbitRate));
-	if (err) {
+	if (err && err != -ENOTSUP) {
 		LOG_ERR("failed to configure CAN bitrate (err %d)", err);
 		return CO_ERROR_ILLEGAL_ARGUMENT;
 	}
