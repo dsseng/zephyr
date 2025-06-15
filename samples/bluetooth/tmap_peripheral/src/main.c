@@ -24,6 +24,7 @@
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/kernel.h>
+#include <zephyr/settings/settings.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
@@ -216,6 +217,10 @@ int main(void)
 	}
 
 	printk("Bluetooth initialized\n");
+
+	if (IS_ENABLED(CONFIG_SETTINGS)) {
+		settings_load();
+	}
 
 	k_work_init_delayable(&call_terminate_set_work, audio_timer_timeout);
 	k_work_init_delayable(&media_pause_set_work, media_play_timeout);
