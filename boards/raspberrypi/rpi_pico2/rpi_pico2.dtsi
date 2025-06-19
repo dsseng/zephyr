@@ -64,7 +64,7 @@
 };
 
 &uart0 {
-	current-speed = <115200>;
+	current-speed = <2000000>;
 	status = "reserved";
 	pinctrl-0 = <&uart0_default>;
 	pinctrl-names = "default";
