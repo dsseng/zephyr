@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: KevinOConnor
+      url-base: https://github.com/KevinOConnor
 
   group-filter: [-babblesim, -optional]
 
@@ -116,6 +118,10 @@ manifest:
       path: tools/bsim
       groups:
         - babblesim
+    - name: can2040
+      remote: KevinOConnor
+      revision: bcfadf84bf248f662b20676494df7757cfc55cb0
+      path: modules/lib/can2040
     - name: cmsis
       revision: 512cc7e895e8491696b61f7ba8066b4a182569b8
       path: modules/hal/cmsis

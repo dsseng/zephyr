@@ -115,3 +115,12 @@ zephyr_udc0: &usbd {
 				};
 		};
 };
+
+&pio1 {
+		status = "okay";
+
+		can2040: can2040 {
+				compatible = "can2040,can2040";
+				status = "okay";
+		};
+};
