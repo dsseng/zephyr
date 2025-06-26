@@ -120,6 +120,7 @@ bur	B&R Industrial Automation GmbH
 bytesatwork	bytesatwork AG
 calaosystems	CALAO Systems SAS
 calxeda	Calxeda
+can2040	can2040 Project
 canaan	Canaan, Inc.
 caninos	Caninos Loucos Program
 capella	Capella Microsystems, Inc
