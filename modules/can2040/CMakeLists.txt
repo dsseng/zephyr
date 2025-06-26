@@ -6,10 +6,6 @@ zephyr_include_directories(
 	${ZEPHYR_CAN2040_MODULE_DIR}/src
 )
 
-zephyr_library_include_directories(
-	${ZEPHYR_CAN2040_MODULE_DIR}/src
-)
-
 zephyr_library_sources(
 	${ZEPHYR_CAN2040_MODULE_DIR}/src/can2040.c
 )
