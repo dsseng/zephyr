@@ -152,3 +152,15 @@ pico_serial: &uart0 {};
 		};
 	};
 };
+
+
+&pio1 {
+	status = "okay";
+
+	can2040: can2040 {
+		compatible = "can2040,can2040";
+		status = "okay";
+		// pinctrl-0 = <&ws2812_pio0_default>;
+		// pinctrl-names = "default";
+	};
+};
