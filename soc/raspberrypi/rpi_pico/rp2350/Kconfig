@@ -16,7 +16,7 @@ config SOC_RP2350A_M33_CPU0
 	select CPU_CORTEX_M33
 	select CPU_HAS_ARM_MPU
 	select CPU_HAS_ARM_SAU
-	select XIP
+	select CPU_HAS_FPU
 
 config SOC_RP2350A_M33_CPU1
 	select ARM
@@ -40,7 +40,7 @@ config SOC_RP2350B_M33
 
 config RP2_REQUIRES_IMAGE_DEFINITION_BLOCK
 	bool
-	default y if FLASH_LOAD_OFFSET = 0x100
+	default y if !SOC_RP2350A_M33_CPU1
 	# Currently the IDF only supports using the Cortex-M33 cores. Enforce
 	# this at build configuration time.
 	depends on SOC_SERIES_RP2350 && CPU_CORTEX_M33
