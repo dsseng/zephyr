@@ -3,16 +3,3 @@
 
 config ZEPHYR_CAN2040_MODULE
 	bool
-
-config CAN2040
-	bool "CAN2040 Support"
-	select CRC
-	depends on CAN
-	help
-	  Enable the can2040 PIO virtual CAN controller support.
-
-if CAN2040
-
-###
-
-endif

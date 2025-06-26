@@ -18,7 +18,7 @@
 #include <zephyr/drivers/can.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
-// #include <can2040.h>
+#include "can2040.h"
 
 #define CONFIG_CAN_MAX_FILTER 16
 #define CONFIG_CAN_CAN2040_TX_THREAD_STACK_SIZE 512
