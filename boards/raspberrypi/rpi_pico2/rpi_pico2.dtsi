@@ -128,6 +128,17 @@ pico_serial: &uart0 {};
 			pinmux = <PIO0_P21>;
 		};
 	};
+
+	 can2040_default: can2040_default {
+		rx_pins {
+			pinmux = <PIO1_P4>;
+			input-enable;
+			bias-pull-up;
+		};
+		tx_pins {
+			pinmux = <PIO1_P5>;
+		};
+	};
 };
 
 &pio0 {
@@ -153,6 +164,7 @@ pico_serial: &uart0 {};
 	};
 };
 
+#include <zephyr/dt-bindings/clock/rpi_pico_rp2350_clock.h>
 
 &pio1 {
 	status = "okay";
@@ -160,7 +172,8 @@ pico_serial: &uart0 {};
 	can2040: can2040 {
 		compatible = "can2040,can2040";
 		status = "okay";
-		// pinctrl-0 = <&ws2812_pio0_default>;
-		// pinctrl-names = "default";
+		clocks = <&clocks RPI_PICO_CLKID_CLK_SYS>;
+		pinctrl-0 = <&can2040_default>;
+		pinctrl-names = "default";
 	};
 };

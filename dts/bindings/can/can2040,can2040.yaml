@@ -5,4 +5,4 @@ description: Zephyr emulated CAN loopback controller
 
 compatible: "can2040,can2040"
 
-include: can-controller.yaml
+include: [can-controller.yaml, pinctrl-device.yaml]
