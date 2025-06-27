@@ -11,6 +11,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "hardware/pio.h"
+#include "zephyr/device.h"
+#include "zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h"
+#include <stdint.h>
 #define DT_DRV_COMPAT can2040_can2040
 
 #include <stdbool.h>
@@ -43,6 +47,8 @@ struct can_can2040_filter {
 
 struct can_can2040_config {
 	const struct can_driver_config common;
+	const struct device *piodev;
+	const uint32_t clk_freq;
 	void (*irq_enable_func)(const struct device *dev);
 };
 
@@ -258,17 +264,18 @@ static int can_can2040_start(const struct device *dev)
 
 	data->common.started = true;
 
-	// FIXME: hardcoded PIO number
-	// Use DT_PARENT for PIO
-	can2040_setup(&data->can2040, 1);
+	const struct device *piodev = config->piodev;
+	memset(&data->can2040, 0, sizeof(data->can2040));
+	data->can2040.pio_num = 1; // FIXME HARDCODED
+	data->can2040.pio_hw = pio_rpi_pico_get_pio(piodev);
 	can2040_callback_config(&data->can2040, can_can2040_callback);
 
 	config->irq_enable_func(dev);
 
-	LOG_DBG("Enable device %s %p", dev->name, (void *)&data->can2040);
+	LOG_DBG("Enable device %s %p, clock: %u", dev->name, (void *)&data->can2040, config->clk_freq);
 
 	// FIXME: use DT clock and pinctrl, as well as CAN API for bitrate
-	can2040_start(&data->can2040, 150000000, 1000000, 4, 5);
+	can2040_start(&data->can2040, config->clk_freq, 1000000, 4, 5);
 
 	return 0;
 }
@@ -438,17 +445,19 @@ static int can_can2040_init(const struct device *dev)
 #define CAN_CAN2040_INIT(inst)									\
 	static void can_can2040_irq_enable_func_##n(const struct device *dev)		\
 	{										\
-		IRQ_CONNECT(DT_IRQ_BY_NAME(DT_NODELABEL(pio1), irq0, irq), /* FIXME hardcoded PIO number */ \
-				DT_IRQ_BY_NAME(DT_NODELABEL(pio1), irq0, priority), /* FIXME hardcoded PIO number */ \
+		IRQ_CONNECT(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq),\
+				DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, priority),\
 				can_can2040_pio_irq_handler,					\
 			    DEVICE_DT_INST_GET(inst),					\
 			    0);								\
 											\
-		irq_enable(DT_IRQ_BY_NAME(DT_NODELABEL(pio1), irq0, irq));		 /* FIXME hardcoded PIO number */				\
+		irq_enable(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq));\
 	}					 	\
 	\
 	static const struct can_can2040_config can_can2040_config_##inst = {			\
 		.common = CAN_DT_DRIVER_CONFIG_INST_GET(inst, 0, CAN_CAN2040_MAX_BITRATE),	\
+		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),					\
+		.clk_freq = 150000000, /* FIXME */ \
 		.irq_enable_func = can_can2040_irq_enable_func_##n,			\
 	};											\
 												\
