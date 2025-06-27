@@ -17,8 +17,6 @@
 #include <stdint.h>
 #define DT_DRV_COMPAT can2040_can2040
 
-#include <stdbool.h>
-
 #include <zephyr/drivers/can.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
@@ -27,9 +25,6 @@
 #include "can2040_ll.h"
 
 #define CONFIG_CAN_MAX_FILTER 16
-#define CONFIG_CAN_CAN2040_TX_THREAD_STACK_SIZE 512
-#define CONFIG_CAN_CAN2040_TX_THREAD_PRIORITY 2
-#define CONFIG_CAN_CAN2040_TX_MSGQ_SIZE 16
 
 LOG_MODULE_REGISTER(can_can2040, CONFIG_CAN_LOG_LEVEL);
 
@@ -59,12 +54,6 @@ struct can_can2040_data {
 	struct can_driver_data common;
 	struct can_can2040_filter filters[CONFIG_CAN_MAX_FILTER];
 	struct k_mutex mtx;
-	struct k_msgq tx_msgq;
-	char msgq_buffer[CONFIG_CAN_CAN2040_TX_MSGQ_SIZE * sizeof(struct can_can2040_frame)];
-	struct k_thread tx_thread_data;
-
-	K_KERNEL_STACK_MEMBER(tx_thread_stack,
-		      CONFIG_CAN_CAN2040_TX_THREAD_STACK_SIZE);
 };
 
 static void receive_frame(const struct device *dev,
@@ -79,50 +68,6 @@ static void receive_frame(const struct device *dev,
 		(frame->flags & CAN_FRAME_RTR) != 0 ? ", RTR frame" : "");
 
 	filter->rx_cb(dev, &frame_tmp, filter->cb_arg);
-}
-
-static void tx_thread(void *arg1, void *arg2, void *arg3)
-{
-	const struct device *dev = arg1;
-	struct can_can2040_data *data = dev->data;
-	struct can_can2040_frame frame;
-	struct can_can2040_filter *filter;
-	int ret;
-
-	ARG_UNUSED(arg2);
-	ARG_UNUSED(arg3);
-
-	LOG_DBG("... Starting TX thread for %s", dev->name);
-
-	while (1) {
-		ret = k_msgq_get(&data->tx_msgq, &frame, K_FOREVER);
-		if (ret < 0) {
-			LOG_DBG("Pend on TX queue returned without valid frame (err %d)", ret);
-			continue;
-		}
-		LOG_DBG("TX frame received: %d bytes. Id: 0x%x, ID type: %s %s",
-   frame.frame.dlc, frame.frame.id,
-   (frame.frame.flags & CAN_FRAME_IDE) != 0 ? "extended" : "standard",
-   (frame.frame.flags & CAN_FRAME_RTR) != 0 ? ", RTR frame" : "");
-		frame.cb(dev, 0, frame.cb_arg);
-
-		// if ((data->common.mode & CAN_MODE_LOOPBACK) == 0U) {
-		// 	continue;
-		// }
-
-		k_mutex_lock(&data->mtx, K_FOREVER);
-
-		for (int i = 0; i < CONFIG_CAN_MAX_FILTER; i++) {
-			filter = &data->filters[i];
-			if (filter->rx_cb != NULL &&
-			    can_frame_matches_filter(&frame.frame, &filter->filter)) {
-				LOG_DBG("tx->receive");
-				receive_frame(dev, &frame.frame, filter);
-			}
-		}
-
-		k_mutex_unlock(&data->mtx);
-	}
 }
 
 static int can_can2040_send(const struct device *dev,
@@ -160,6 +105,7 @@ static int can_can2040_send(const struct device *dev,
 	LOG_DBG("TX frame: id=0x%x, dlc=%d, flags=0x%02x",
 		tx.id, tx.dlc, frame->flags);
 	memcpy(tx.data, frame->data, frame->dlc);
+	// FIXME callback for TX completion
 
 	ret = can2040_transmit(&data->can2040, &tx);
 	if (ret < 0) {
@@ -207,9 +153,10 @@ static int can_can2040_add_rx_filter(const struct device *dev, can_rx_callback_t
 
 	loopback_filter = &data->filters[filter_id];
 
-	loopback_filter->rx_cb = cb;
 	loopback_filter->cb_arg = cb_arg;
 	loopback_filter->filter = *filter;
+	// Add callback the last, so we don't call it before the filter is fully set up
+	loopback_filter->rx_cb = cb;
 	k_mutex_unlock(&data->mtx);
 
 	LOG_DBG("Filter added. ID: %d", filter_id);
@@ -247,6 +194,37 @@ can_can2040_callback(struct can2040 *can2040_dev, uint32_t notify, struct can204
 {
 	const struct device *dev = can2040_dev->rx_cb_user_data;
 	LOG_DBG("can2040_cb (%s): notify=0x%08x, msg->id=0x%08x, msg->dlc=%d", dev->name, notify, msg->id, msg->dlc);
+
+	if (notify & CAN2040_NOTIFY_RX) {
+		struct can_can2040_data *data = dev->data;
+		struct can_can2040_filter *filter;
+
+		struct can_frame frame = {
+			.id = msg->id & CAN_EXT_ID_MASK,
+			.dlc = msg->dlc,
+			.flags = ((msg->id & CAN2040_ID_EFF) ? CAN_FRAME_IDE : 0) |
+					 ((msg->id & CAN2040_ID_RTR) ? CAN_FRAME_RTR : 0),
+		};
+		memcpy(frame.data, msg->data, frame.dlc);
+
+		LOG_DBG("Received frame: id=0x%x, dlc=%d, flags=0x%02x",
+			frame.id, frame.dlc, frame.flags);
+
+		// SAFETY: cannot lock mutex in ISR
+		for (int i = 0; i < CONFIG_CAN_MAX_FILTER; i++) {
+			filter = &data->filters[i];
+			if (filter->rx_cb != NULL &&
+			    can_frame_matches_filter(&frame, &filter->filter)) {
+				LOG_DBG("rx->receive");
+				receive_frame(dev, &frame, filter);
+			}
+		}
+	} else if (notify & CAN2040_NOTIFY_TX) {
+		LOG_DBG("TX complete: id=0x%x, dlc=%d", msg->id, msg->dlc);
+		// TODO call the callback if it was set
+	} else if (notify & CAN2040_NOTIFY_ERROR) {
+		LOG_ERR("Bus error notification received");
+	}
 }
 
 static void can_can2040_pio_irq_handler(const struct device *dev)
@@ -296,8 +274,6 @@ static int can_can2040_stop(const struct device *dev)
 	}
 
 	data->common.started = false;
-
-	k_msgq_purge(&data->tx_msgq);
 
 	return 0;
 }
@@ -421,28 +397,12 @@ static DEVICE_API(can, can_can2040_driver_api) = {
 static int can_can2040_init(const struct device *dev)
 {
 	struct can_can2040_data *data = dev->data;
-	k_tid_t tx_tid;
 
 	k_mutex_init(&data->mtx);
 
 	for (int i = 0; i < CONFIG_CAN_MAX_FILTER; i++) {
 		data->filters[i].rx_cb = NULL;
 	}
-
-	k_msgq_init(&data->tx_msgq, data->msgq_buffer, sizeof(struct can_can2040_frame),
-		    CONFIG_CAN_CAN2040_TX_MSGQ_SIZE);
-
-	tx_tid = k_thread_create(&data->tx_thread_data, data->tx_thread_stack,
-				 K_KERNEL_STACK_SIZEOF(data->tx_thread_stack),
-				 tx_thread, (void *)dev, NULL, NULL,
-				 CONFIG_CAN_CAN2040_TX_THREAD_PRIORITY,
-				 0, K_NO_WAIT);
-	if (!tx_tid) {
-		LOG_ERR("ERROR spawning tx thread");
-		return -1;
-	}
-
-	k_thread_name_set(tx_tid, dev->name);
 
 	return 0;
 }
