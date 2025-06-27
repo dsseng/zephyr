@@ -14,6 +14,7 @@
 #include "hardware/pio.h"
 #include "zephyr/device.h"
 #include "zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h"
+#include "zephyr/drivers/pinctrl.h"
 #include <stdint.h>
 #define DT_DRV_COMPAT can2040_can2040
 
@@ -48,6 +49,7 @@ struct can_can2040_filter {
 struct can_can2040_config {
 	const struct can_driver_config common;
 	const struct device *piodev;
+	const struct pinctrl_dev_config *pcfg;
 	const uint32_t clk_freq;
 	void (*irq_enable_func)(const struct device *dev);
 };
@@ -277,7 +279,7 @@ static int can_can2040_start(const struct device *dev)
 	// FIXME: use DT clock and pinctrl, as well as CAN API for bitrate
 	can2040_start(&data->can2040, config->clk_freq, 1000000, 4, 5);
 
-	return 0;
+	return pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 }
 
 static int can_can2040_stop(const struct device *dev)
@@ -443,6 +445,7 @@ static int can_can2040_init(const struct device *dev)
 #define CAN_CAN2040_MAX_BITRATE 1000000
 
 #define CAN_CAN2040_INIT(inst)									\
+	PINCTRL_DT_INST_DEFINE(inst);								\
 	static void can_can2040_irq_enable_func_##n(const struct device *dev)		\
 	{										\
 		IRQ_CONNECT(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq),\
@@ -457,6 +460,7 @@ static int can_can2040_init(const struct device *dev)
 	static const struct can_can2040_config can_can2040_config_##inst = {			\
 		.common = CAN_DT_DRIVER_CONFIG_INST_GET(inst, 0, CAN_CAN2040_MAX_BITRATE),	\
 		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),					\
+		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst), \
 		.clk_freq = 150000000, /* FIXME */ \
 		.irq_enable_func = can_can2040_irq_enable_func_##n,			\
 	};											\
