@@ -18,6 +18,8 @@
 #include <zephyr/drivers/can.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/irq.h>
+
 #include "can2040.h"
 
 #define CONFIG_CAN_MAX_FILTER 16
@@ -41,9 +43,12 @@ struct can_can2040_filter {
 
 struct can_can2040_config {
 	const struct can_driver_config common;
+	void (*irq_enable_func)(const struct device *dev);
 };
 
 struct can_can2040_data {
+	struct can2040 can2040;
+
 	struct can_driver_data common;
 	struct can_can2040_filter filters[CONFIG_CAN_MAX_FILTER];
 	struct k_mutex mtx;
@@ -226,15 +231,44 @@ static int can_can2040_get_capabilities(const struct device *dev, can_mode_t *ca
 	return 0;
 }
 
+// Called from an ISR
+static void
+can_can2040_callback(struct can2040 *_, uint32_t notify, struct can2040_msg *msg)
+{
+	// if (notify == CAN2040_NOTIFY_RX) {
+	LOG_DBG("can2040_cb: notify=0x%08x, msg->id=0x%08x, msg->dlc=%d", notify, msg->id, msg->dlc);
+	// }
+}
+
+static void can_can2040_pio_irq_handler(const struct device *dev)
+{
+	struct can_can2040_data *data = dev->data;
+	// LOG_DBG("IRQ %s %p", dev->name, (void *)&data->can2040);
+	can2040_pio_irq_handler(&data->can2040);
+}
+
 static int can_can2040_start(const struct device *dev)
 {
 	struct can_can2040_data *data = dev->data;
+	const struct can_can2040_config *config = dev->config;
 
 	if (data->common.started) {
 		return -EALREADY;
 	}
 
 	data->common.started = true;
+
+	// FIXME: hardcoded PIO number
+	// Use DT_PARENT for PIO
+	can2040_setup(&data->can2040, 1);
+	can2040_callback_config(&data->can2040, can_can2040_callback);
+
+	config->irq_enable_func(dev);
+
+	LOG_DBG("Enable device %s %p", dev->name, (void *)&data->can2040);
+
+	// FIXME: use DT clock and pinctrl, as well as CAN API for bitrate
+	can2040_start(&data->can2040, 150000000, 1000000, 4, 5);
 
 	return 0;
 }
@@ -402,8 +436,20 @@ static int can_can2040_init(const struct device *dev)
 #define CAN_CAN2040_MAX_BITRATE 1000000
 
 #define CAN_CAN2040_INIT(inst)									\
+	static void can_can2040_irq_enable_func_##n(const struct device *dev)		\
+	{										\
+		IRQ_CONNECT(DT_IRQ_BY_NAME(DT_NODELABEL(pio1), irq0, irq), /* FIXME hardcoded PIO number */ \
+				DT_IRQ_BY_NAME(DT_NODELABEL(pio1), irq0, priority), /* FIXME hardcoded PIO number */ \
+				can_can2040_pio_irq_handler,					\
+			    DEVICE_DT_INST_GET(inst),					\
+			    0);								\
+											\
+		irq_enable(DT_IRQ_BY_NAME(DT_NODELABEL(pio1), irq0, irq));		 /* FIXME hardcoded PIO number */				\
+	}					 	\
+	\
 	static const struct can_can2040_config can_can2040_config_##inst = {			\
 		.common = CAN_DT_DRIVER_CONFIG_INST_GET(inst, 0, CAN_CAN2040_MAX_BITRATE),	\
+		.irq_enable_func = can_can2040_irq_enable_func_##n,			\
 	};											\
 												\
 	static struct can_can2040_data can_can2040_data_##inst;				\
