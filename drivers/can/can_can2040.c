@@ -56,20 +56,6 @@ struct can_can2040_data {
 	struct k_mutex mtx;
 };
 
-static void receive_frame(const struct device *dev,
-			  const struct can_frame *frame,
-			  struct can_can2040_filter *filter)
-{
-	struct can_frame frame_tmp = *frame;
-
-	LOG_DBG("Receiving %d bytes. Id: 0x%x, ID type: %s %s",
-		frame->dlc, frame->id,
-		(frame->flags & CAN_FRAME_IDE) != 0 ? "extended" : "standard",
-		(frame->flags & CAN_FRAME_RTR) != 0 ? ", RTR frame" : "");
-
-	filter->rx_cb(dev, &frame_tmp, filter->cb_arg);
-}
-
 static int can_can2040_send(const struct device *dev,
 			     const struct can_frame *frame,
 			     k_timeout_t timeout, can_tx_callback_t callback,
@@ -132,7 +118,7 @@ static int can_can2040_add_rx_filter(const struct device *dev, can_rx_callback_t
 				      void *cb_arg, const struct can_filter *filter)
 {
 	struct can_can2040_data *data = dev->data;
-	struct can_can2040_filter *loopback_filter;
+	struct can_can2040_filter *filter_entry;
 	int filter_id;
 
 	LOG_DBG("Setting filter ID: 0x%x, mask: 0x%x", filter->id, filter->mask);
@@ -151,12 +137,12 @@ static int can_can2040_add_rx_filter(const struct device *dev, can_rx_callback_t
 		return filter_id;
 	}
 
-	loopback_filter = &data->filters[filter_id];
+	filter_entry = &data->filters[filter_id];
 
-	loopback_filter->cb_arg = cb_arg;
-	loopback_filter->filter = *filter;
+	filter_entry->cb_arg = cb_arg;
+	filter_entry->filter = *filter;
 	// Add callback the last, so we don't call it before the filter is fully set up
-	loopback_filter->rx_cb = cb;
+	filter_entry->rx_cb = cb;
 	k_mutex_unlock(&data->mtx);
 
 	LOG_DBG("Filter added. ID: %d", filter_id);
@@ -183,7 +169,8 @@ static int can_can2040_get_capabilities(const struct device *dev, can_mode_t *ca
 {
 	ARG_UNUSED(dev);
 
-	*cap = CAN_MODE_NORMAL | CAN_MODE_LOOPBACK;
+	// TODO: CAN_MODE_LISTENONLY, CAN_MODE_ONE_SHOT?
+	*cap = CAN_MODE_NORMAL;
 
 	return 0;
 }
@@ -216,7 +203,7 @@ can_can2040_callback(struct can2040 *can2040_dev, uint32_t notify, struct can204
 			if (filter->rx_cb != NULL &&
 			    can_frame_matches_filter(&frame, &filter->filter)) {
 				LOG_DBG("rx->receive");
-				receive_frame(dev, &frame, filter);
+				filter->rx_cb(dev, &frame, filter->cb_arg);
 			}
 		}
 	} else if (notify & CAN2040_NOTIFY_TX) {
@@ -247,6 +234,8 @@ static int can_can2040_start(const struct device *dev)
 	data->can2040.pio_hw = pio_rpi_pico_get_pio(config->piodev);
 	data->can2040.rx_cb_user_data = (void *)dev;
 	can2040_callback_config(&data->can2040, can_can2040_callback);
+
+	CAN_STATS_RESET(dev);
 
 	config->irq_enable_func(dev);
 
@@ -283,20 +272,14 @@ static int can_can2040_set_mode(const struct device *dev, can_mode_t mode)
 	struct can_can2040_data *data = dev->data;
 
 	if (data->common.started) {
+		LOG_ERR("Cannot set mode while CAN is running");
 		return -EBUSY;
 	}
 
-#ifdef CONFIG_CAN_FD_MODE
-	if ((mode & ~(CAN_MODE_LOOPBACK | CAN_MODE_FD)) != 0) {
+	if (mode != 0) {
 		LOG_ERR("unsupported mode: 0x%08x", mode);
 		return -ENOTSUP;
 	}
-#else
-	if ((mode & ~(CAN_MODE_LOOPBACK)) != 0) {
-		LOG_ERR("unsupported mode: 0x%08x", mode);
-		return -ENOTSUP;
-	}
-#endif /* CONFIG_CAN_FD_MODE */
 
 	data->common.mode = mode;
 
@@ -314,6 +297,8 @@ static int can_can2040_set_timing(const struct device *dev,
 		return -EBUSY;
 	}
 
+	// TODO if it is possible to get bitrate from timing
+
 	return 0;
 }
 
@@ -322,6 +307,7 @@ static int can_can2040_get_state(const struct device *dev, enum can_state *state
 {
 	struct can_can2040_data *data = dev->data;
 
+	// TODO proper statistics
 	if (state != NULL) {
 		if (data->common.started) {
 			*state = CAN_STATE_ERROR_ACTIVE;
@@ -345,6 +331,8 @@ static void can_can2040_set_state_change_callback(const struct device *dev,
 	ARG_UNUSED(dev);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(user_data);
+
+	// TODO
 }
 
 static int can_can2040_get_core_clock(const struct device *dev, uint32_t *rate)
