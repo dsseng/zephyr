@@ -11,7 +11,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "hardware/pio.h"
 #include "zephyr/device.h"
 #include "zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h"
 #include "zephyr/drivers/pinctrl.h"
@@ -277,7 +276,12 @@ static int can_can2040_start(const struct device *dev)
 	LOG_DBG("Enable device %s %p, clock: %u", dev->name, (void *)&data->can2040, config->clk_freq);
 
 	// FIXME: use DT clock and pinctrl, as well as CAN API for bitrate
-	can2040_start(&data->can2040, config->clk_freq, 1000000, 4, 5);
+	can2040_ll_data_state_clear_bits(&data->can2040);
+	data->can2040.gpio_rx = 4;
+	data->can2040.gpio_tx = 5;
+	can2040_ll_pio_set_clkdiv(&data->can2040, config->clk_freq, 1000000);
+	can2040_ll_pio_sm_setup(&data->can2040);
+	can2040_ll_data_state_go_discard(&data->can2040);
 
 	return pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 }
