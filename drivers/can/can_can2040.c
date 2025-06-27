@@ -131,8 +131,6 @@ static int can_can2040_send(const struct device *dev,
 			     void *user_data)
 {
 	struct can_can2040_data *data = dev->data;
-	struct can_can2040_frame loopback_frame;
-	uint8_t max_dlc = CAN_MAX_DLC;
 	int ret;
 
 	LOG_DBG("Sending %d bytes on %s. Id: 0x%x, ID type: %s %s",
@@ -145,8 +143,8 @@ static int can_can2040_send(const struct device *dev,
 		return -ENOTSUP;
 	}
 
-	if (frame->dlc > max_dlc) {
-		LOG_ERR("DLC of %d exceeds maximum (%d)", frame->dlc, max_dlc);
+	if (frame->dlc > CAN_MAX_DLC) {
+		LOG_ERR("DLC of %d exceeds maximum (%d)", frame->dlc, CAN_MAX_DLC);
 		return -EINVAL;
 	}
 
@@ -154,11 +152,16 @@ static int can_can2040_send(const struct device *dev,
 		return -ENETDOWN;
 	}
 
-	loopback_frame.frame = *frame;
-	loopback_frame.cb = callback;
-	loopback_frame.cb_arg = user_data;
+	struct can2040_msg tx;
+	tx.dlc = frame->dlc;
+	tx.id = frame->id;
+	tx.id |= (frame->flags & CAN_FRAME_IDE) ? CAN2040_ID_EFF : 0;
+	tx.id |= (frame->flags & CAN_FRAME_RTR) ? CAN2040_ID_RTR : 0;
+	LOG_DBG("TX frame: id=0x%x, dlc=%d, flags=0x%02x",
+		tx.id, tx.dlc, frame->flags);
+	memcpy(tx.data, frame->data, frame->dlc);
 
-	ret = k_msgq_put(&data->tx_msgq, &loopback_frame, timeout);
+	ret = can2040_transmit(&data->can2040, &tx);
 	if (ret < 0) {
 		LOG_DBG("TX queue full (err %d)", ret);
 		return -EAGAIN;
@@ -262,8 +265,6 @@ static int can_can2040_start(const struct device *dev)
 		return -EALREADY;
 	}
 
-	data->common.started = true;
-
 	memset(&data->can2040, 0, sizeof(data->can2040));
 	data->can2040.pio_hw = pio_rpi_pico_get_pio(config->piodev);
 	data->can2040.rx_cb_user_data = (void *)dev;
@@ -280,6 +281,8 @@ static int can_can2040_start(const struct device *dev)
 	can2040_ll_pio_set_clkdiv(&data->can2040, config->clk_freq, 1000000);
 	can2040_ll_pio_sm_setup(&data->can2040);
 	can2040_ll_data_state_go_discard(&data->can2040);
+
+	data->common.started = true;
 
 	return pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 }
