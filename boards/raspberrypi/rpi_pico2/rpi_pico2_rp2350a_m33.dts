@@ -87,40 +87,54 @@ zephyr_udc0: &usbd {
 
 &pinctrl {
 	ws2812_pio0_default: ws2812_pio0_default {
-		ws2812 {
-				pinmux = <PIO0_P21>;
+			ws2812 {
+					pinmux = <PIO0_P21>;
+			};
+	};
+
+	can2040_default: can2040_default {
+		rx_pins {
+			pinmux = <PIO1_P4>;
+			input-enable;
+			bias-pull-up;
+		};
+		tx_pins {
+			pinmux = <PIO1_P5>;
 		};
 	};
 };
 
 &pio0 {
+	status = "okay";
+
+	pio-ws2812 {
+		compatible = "worldsemi,ws2812-rpi_pico-pio";
 		status = "okay";
+		pinctrl-0 = <&ws2812_pio0_default>;
+		pinctrl-names = "default";
+		bit-waveform = <3>, <3>, <4>;
 
-		pio-ws2812 {
-				compatible = "worldsemi,ws2812-rpi_pico-pio";
-				status = "okay";
-				pinctrl-0 = <&ws2812_pio0_default>;
-				pinctrl-names = "default";
-				bit-waveform = <3>, <3>, <4>;
-
-				ws2812: ws2812 {
-						status = "okay";
-						gpios = <&gpio0 21 GPIO_ACTIVE_HIGH>;
-						chain-length = <1>;
-						color-mapping = <LED_COLOR_ID_GREEN
-											LED_COLOR_ID_RED
-											LED_COLOR_ID_BLUE>;
-						reset-delay = <280>;
-						frequency = <800000>;
-				};
+		ws2812: ws2812 {
+			status = "okay";
+			gpios = <&gpio0 21 GPIO_ACTIVE_HIGH>;
+			chain-length = <1>;
+			color-mapping = <LED_COLOR_ID_GREEN
+					 LED_COLOR_ID_RED
+					 LED_COLOR_ID_BLUE>;
+			reset-delay = <280>;
+			frequency = <800000>;
 		};
+	};
 };
 
 &pio1 {
-		status = "okay";
+	status = "okay";
 
-		can2040: can2040 {
-				compatible = "can2040,can2040";
-				status = "okay";
-		};
+	can2040: can2040 {
+		compatible = "can2040,can2040";
+		status = "okay";
+		clocks = <&clocks RPI_PICO_CLKID_CLK_SYS>;
+		pinctrl-0 = <&can2040_default>;
+		pinctrl-names = "default";
+	};
 };
