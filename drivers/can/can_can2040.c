@@ -24,7 +24,7 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/irq.h>
 
-#include "can2040.h"
+#include "can2040_ll.h"
 
 #define CONFIG_CAN_MAX_FILTER 16
 #define CONFIG_CAN_CAN2040_TX_THREAD_STACK_SIZE 512
@@ -240,11 +240,10 @@ static int can_can2040_get_capabilities(const struct device *dev, can_mode_t *ca
 
 // Called from an ISR
 static void
-can_can2040_callback(struct can2040 *_, uint32_t notify, struct can2040_msg *msg)
+can_can2040_callback(struct can2040 *can2040_dev, uint32_t notify, struct can2040_msg *msg)
 {
-	// if (notify == CAN2040_NOTIFY_RX) {
-	LOG_DBG("can2040_cb: notify=0x%08x, msg->id=0x%08x, msg->dlc=%d", notify, msg->id, msg->dlc);
-	// }
+	const struct device *dev = can2040_dev->rx_cb_user_data;
+	LOG_DBG("can2040_cb (%s): notify=0x%08x, msg->id=0x%08x, msg->dlc=%d", dev->name, notify, msg->id, msg->dlc);
 }
 
 static void can_can2040_pio_irq_handler(const struct device *dev)
@@ -265,10 +264,9 @@ static int can_can2040_start(const struct device *dev)
 
 	data->common.started = true;
 
-	const struct device *piodev = config->piodev;
 	memset(&data->can2040, 0, sizeof(data->can2040));
-	data->can2040.pio_num = 1; // FIXME HARDCODED
-	data->can2040.pio_hw = pio_rpi_pico_get_pio(piodev);
+	data->can2040.pio_hw = pio_rpi_pico_get_pio(config->piodev);
+	data->can2040.rx_cb_user_data = (void *)dev;
 	can2040_callback_config(&data->can2040, can_can2040_callback);
 
 	config->irq_enable_func(dev);
