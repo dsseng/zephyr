@@ -28,12 +28,6 @@
 
 LOG_MODULE_REGISTER(can_can2040, CONFIG_CAN_LOG_LEVEL);
 
-struct can_can2040_frame {
-	struct can_frame frame;
-	can_tx_callback_t cb;
-	void *cb_arg;
-};
-
 struct can_can2040_filter {
 	can_rx_callback_t rx_cb;
 	void *cb_arg;
@@ -53,7 +47,11 @@ struct can_can2040_data {
 
 	struct can_driver_data common;
 	struct can_can2040_filter filters[CONFIG_CAN_MAX_FILTER];
-	struct k_mutex mtx;
+	struct k_mutex filters_mtx;
+
+	can_tx_callback_t tx_cb;
+	void *tx_cb_arg;
+	struct k_sem tx_idle;
 };
 
 static int can_can2040_send(const struct device *dev,
@@ -63,6 +61,10 @@ static int can_can2040_send(const struct device *dev,
 {
 	struct can_can2040_data *data = dev->data;
 	int ret;
+
+	if (k_sem_take(&data->tx_idle, timeout) != 0) {
+		return -EAGAIN;
+	}
 
 	LOG_DBG("Sending %d bytes on %s. Id: 0x%x, ID type: %s %s",
 		frame->dlc, dev->name, frame->id,
@@ -91,7 +93,9 @@ static int can_can2040_send(const struct device *dev,
 	LOG_DBG("TX frame: id=0x%x, dlc=%d, flags=0x%02x",
 		tx.id, tx.dlc, frame->flags);
 	memcpy(tx.data, frame->data, frame->dlc);
-	// FIXME callback for TX completion
+
+	data->tx_cb = callback;
+	data->tx_cb_arg = user_data;
 
 	ret = can2040_transmit(&data->can2040, &tx);
 	if (ret < 0) {
@@ -128,12 +132,12 @@ static int can_can2040_add_rx_filter(const struct device *dev, can_rx_callback_t
 		return -ENOTSUP;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	k_mutex_lock(&data->filters_mtx, K_FOREVER);
 	filter_id = get_free_filter(data->filters);
 
 	if (filter_id < 0) {
 		LOG_ERR("No free filter left");
-		k_mutex_unlock(&data->mtx);
+		k_mutex_unlock(&data->filters_mtx);
 		return filter_id;
 	}
 
@@ -143,7 +147,7 @@ static int can_can2040_add_rx_filter(const struct device *dev, can_rx_callback_t
 	filter_entry->filter = *filter;
 	// Add callback the last, so we don't call it before the filter is fully set up
 	filter_entry->rx_cb = cb;
-	k_mutex_unlock(&data->mtx);
+	k_mutex_unlock(&data->filters_mtx);
 
 	LOG_DBG("Filter added. ID: %d", filter_id);
 
@@ -160,19 +164,57 @@ static void can_can2040_remove_rx_filter(const struct device *dev, int filter_id
 	}
 
 	LOG_DBG("Remove filter ID: %d", filter_id);
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	k_mutex_lock(&data->filters_mtx, K_FOREVER);
 	data->filters[filter_id].rx_cb = NULL;
-	k_mutex_unlock(&data->mtx);
+	k_mutex_unlock(&data->filters_mtx);
 }
 
 static int can_can2040_get_capabilities(const struct device *dev, can_mode_t *cap)
 {
 	ARG_UNUSED(dev);
 
-	// TODO: CAN_MODE_LISTENONLY, CAN_MODE_ONE_SHOT?
-	*cap = CAN_MODE_NORMAL;
+	// TODO: CAN_MODE_LISTENONLY, CAN_MODE_ONE_SHOT, CAN_MODE_3_SAMPLES?
+	*cap = CAN_MODE_NORMAL | CAN_MODE_LOOPBACK;
 
 	return 0;
+}
+
+static void can_can2040_tx_done(const struct device *dev, int status) {
+	struct can_can2040_data *data = dev->data;
+	can_tx_callback_t callback = data->tx_cb;
+	void *user_data = data->tx_cb_arg;
+
+	if (callback != NULL) {
+		data->tx_cb = NULL;
+		callback(dev, status, user_data);
+	}
+	k_sem_give(&data->tx_idle);
+}
+
+static void can_can2040_handle_rx(const struct device *dev, struct can2040_msg *msg) {
+	struct can_can2040_data *data = dev->data;
+
+	struct can_frame frame = {
+		.id = msg->id & CAN_EXT_ID_MASK,
+		.dlc = msg->dlc,
+		.flags = ((msg->id & CAN2040_ID_EFF) ? CAN_FRAME_IDE : 0) |
+					((msg->id & CAN2040_ID_RTR) ? CAN_FRAME_RTR : 0),
+	};
+	memcpy(frame.data, msg->data, frame.dlc);
+
+	LOG_DBG("Received frame: id=0x%x, dlc=%d, flags=0x%02x",
+		frame.id, frame.dlc, frame.flags);
+
+	struct can_can2040_filter *filter;
+	// SAFETY: cannot lock mutex in ISR
+	for (int i = 0; i < CONFIG_CAN_MAX_FILTER; i++) {
+		filter = &data->filters[i];
+		if (filter->rx_cb != NULL &&
+			can_frame_matches_filter(&frame, &filter->filter)) {
+			LOG_DBG("rx->receive");
+			filter->rx_cb(dev, &frame, filter->cb_arg);
+		}
+	}
 }
 
 // Called from an ISR
@@ -180,37 +222,21 @@ static void
 can_can2040_callback(struct can2040 *can2040_dev, uint32_t notify, struct can2040_msg *msg)
 {
 	const struct device *dev = can2040_dev->rx_cb_user_data;
+	struct can_can2040_data *data = dev->data;
 	LOG_DBG("can2040_cb (%s): notify=0x%08x, msg->id=0x%08x, msg->dlc=%d", dev->name, notify, msg->id, msg->dlc);
 
 	if (notify & CAN2040_NOTIFY_RX) {
-		struct can_can2040_data *data = dev->data;
-		struct can_can2040_filter *filter;
-
-		struct can_frame frame = {
-			.id = msg->id & CAN_EXT_ID_MASK,
-			.dlc = msg->dlc,
-			.flags = ((msg->id & CAN2040_ID_EFF) ? CAN_FRAME_IDE : 0) |
-					 ((msg->id & CAN2040_ID_RTR) ? CAN_FRAME_RTR : 0),
-		};
-		memcpy(frame.data, msg->data, frame.dlc);
-
-		LOG_DBG("Received frame: id=0x%x, dlc=%d, flags=0x%02x",
-			frame.id, frame.dlc, frame.flags);
-
-		// SAFETY: cannot lock mutex in ISR
-		for (int i = 0; i < CONFIG_CAN_MAX_FILTER; i++) {
-			filter = &data->filters[i];
-			if (filter->rx_cb != NULL &&
-			    can_frame_matches_filter(&frame, &filter->filter)) {
-				LOG_DBG("rx->receive");
-				filter->rx_cb(dev, &frame, filter->cb_arg);
-			}
-		}
+		can_can2040_handle_rx(dev, msg);
 	} else if (notify & CAN2040_NOTIFY_TX) {
 		LOG_DBG("TX complete: id=0x%x, dlc=%d", msg->id, msg->dlc);
-		// TODO call the callback if it was set
+		can_can2040_tx_done(dev, 0);
+
+		if (data->common.mode & CAN_MODE_LOOPBACK) {
+			can_can2040_handle_rx(dev, msg);
+		}
 	} else if (notify & CAN2040_NOTIFY_ERROR) {
-		LOG_ERR("Bus error notification received");
+		LOG_WRN("Bus error notification received");
+		can_can2040_tx_done(dev, -EIO);
 	}
 }
 
@@ -264,6 +290,9 @@ static int can_can2040_stop(const struct device *dev)
 
 	data->common.started = false;
 
+	can_can2040_tx_done(dev, -ENETDOWN);
+	/// TODO
+
 	return 0;
 }
 
@@ -276,7 +305,7 @@ static int can_can2040_set_mode(const struct device *dev, can_mode_t mode)
 		return -EBUSY;
 	}
 
-	if (mode != 0) {
+	if (mode & ~(CAN_MODE_NORMAL | CAN_MODE_LOOPBACK)) {
 		LOG_ERR("unsupported mode: 0x%08x", mode);
 		return -ENOTSUP;
 	}
@@ -386,7 +415,8 @@ static int can_can2040_init(const struct device *dev)
 {
 	struct can_can2040_data *data = dev->data;
 
-	k_mutex_init(&data->mtx);
+	k_mutex_init(&data->filters_mtx);
+	k_sem_init(&data->tx_idle, 1, 1);
 
 	for (int i = 0; i < CONFIG_CAN_MAX_FILTER; i++) {
 		data->filters[i].rx_cb = NULL;
