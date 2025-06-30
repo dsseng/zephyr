@@ -39,7 +39,9 @@ struct can_can2040_config {
 	const struct device *piodev;
 	const struct pinctrl_dev_config *pcfg;
 	const uint32_t clk_freq;
+	void (*irq_connect_func)(const struct device *dev);
 	void (*irq_enable_func)(const struct device *dev);
+	void (*irq_disable_func)(const struct device *dev);
 };
 
 struct can_can2040_data {
@@ -236,7 +238,6 @@ can_can2040_callback(struct can2040 *can2040_dev, uint32_t notify, struct can204
 		}
 	} else if (notify & CAN2040_NOTIFY_ERROR) {
 		LOG_WRN("Bus error notification received");
-		can_can2040_tx_done(dev, -EIO);
 	}
 }
 
@@ -263,6 +264,7 @@ static int can_can2040_start(const struct device *dev)
 
 	CAN_STATS_RESET(dev);
 
+	config->irq_connect_func(dev);
 	config->irq_enable_func(dev);
 
 	LOG_DBG("Enable device %s %p, clock: %u", dev->name, (void *)&data->can2040, config->clk_freq);
@@ -283,6 +285,7 @@ static int can_can2040_start(const struct device *dev)
 static int can_can2040_stop(const struct device *dev)
 {
 	struct can_can2040_data *data = dev->data;
+	const struct can_can2040_config *config = dev->config;
 
 	if (!data->common.started) {
 		return -EALREADY;
@@ -291,7 +294,8 @@ static int can_can2040_stop(const struct device *dev)
 	data->common.started = false;
 
 	can_can2040_tx_done(dev, -ENETDOWN);
-	/// TODO
+	config->irq_disable_func(dev);
+	can2040_ll_pio_sm_setup(&data->can2040);
 
 	return 0;
 }
@@ -360,8 +364,6 @@ static void can_can2040_set_state_change_callback(const struct device *dev,
 	ARG_UNUSED(dev);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(user_data);
-
-	// TODO
 }
 
 static int can_can2040_get_core_clock(const struct device *dev, uint32_t *rate)
@@ -429,15 +431,23 @@ static int can_can2040_init(const struct device *dev)
 
 #define CAN_CAN2040_INIT(inst)									\
 	PINCTRL_DT_INST_DEFINE(inst);								\
-	static void can_can2040_irq_enable_func_##n(const struct device *dev)		\
+	static void can_can2040_irq_connect_func_##n(const struct device *dev)		\
 	{										\
 		IRQ_CONNECT(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq),\
 				DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, priority),\
 				can_can2040_pio_irq_handler,					\
 			    DEVICE_DT_INST_GET(inst),					\
 			    0);								\
-											\
+	}					 	\
+	\
+	static void can_can2040_irq_enable_func_##n(const struct device *dev)		\
+	{										\
 		irq_enable(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq));\
+	}					 	\
+	\
+	static void can_can2040_irq_disable_func_##n(const struct device *dev)		\
+	{				\
+		irq_disable(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq));\
 	}					 	\
 	\
 	static const struct can_can2040_config can_can2040_config_##inst = {			\
@@ -445,7 +455,9 @@ static int can_can2040_init(const struct device *dev)
 		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),					\
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst), \
 		.clk_freq = 150000000, /* FIXME */ \
+		.irq_connect_func = can_can2040_irq_connect_func_##n,			\
 		.irq_enable_func = can_can2040_irq_enable_func_##n,			\
+		.irq_disable_func = can_can2040_irq_disable_func_##n,	    \
 	};											\
 												\
 	static struct can_can2040_data can_can2040_data_##inst;				\
