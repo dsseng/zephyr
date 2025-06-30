@@ -84,9 +84,8 @@ static void boot_cpu1(uint32_t vector_table_addr, uint32_t stack_ptr, uint32_t r
 static int enable_cpu1(void)
 {
 	/* Flash addresses are defined in our partition table from the device tree. */
-	uint32_t cpu1_flash_base =
-		DT_REG_ADDR(DT_NODELABEL(flash0)) + DT_REG_ADDR(DT_NODELABEL(code_partition_cpu1));
-	uint32_t cpu1_flash_size = DT_REG_SIZE(DT_NODELABEL(code_partition_cpu1));
+	uint32_t cpu1_flash_base = DT_REG_ADDR(DT_NODELABEL(sram0_cpu1));
+	uint32_t cpu1_flash_size = DT_REG_SIZE(DT_NODELABEL(sram0_cpu1));
 
 	uint32_t *cpu1_vector_table = (uint32_t *)cpu1_flash_base;
 	uint32_t cpu1_stack_ptr = cpu1_vector_table[0];

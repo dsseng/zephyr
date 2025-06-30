@@ -17,6 +17,7 @@
 #include <raspberrypi/rpi_pico/m33.dtsi>
 
 #include "rpi_pico2.dtsi"
+#include "../common/rpi_pico-led.dtsi"
 
 / {
 	chosen {
@@ -24,8 +25,12 @@
 		zephyr,flash = &flash0;
 		zephyr,console = &uart1;
 		zephyr,shell-uart = &uart1;
-		zephyr,code-partition = &code_partition_cpu1;
+		// zephyr,code-partition = &code_partition_cpu1;
 	};
+};
+
+gpio0_lo: &gpio0 {
+	status = "okay";
 };
 
 &uart1 {
