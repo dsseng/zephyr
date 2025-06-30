@@ -82,7 +82,6 @@ zephyr_udc0: &usbd {
 &led0 {
 	status = "okay";
 };
-
 #include <zephyr/dt-bindings/led/led.h>
 
 &pinctrl {
@@ -136,5 +135,6 @@ zephyr_udc0: &usbd {
 		clocks = <&clocks RPI_PICO_CLKID_CLK_SYS>;
 		pinctrl-0 = <&can2040_default>;
 		pinctrl-names = "default";
+		bitrate = <1000000>;
 	};
 };

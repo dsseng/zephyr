@@ -38,6 +38,9 @@ struct can_can2040_config {
 	const struct can_driver_config common;
 	const struct device *piodev;
 	const struct pinctrl_dev_config *pcfg;
+	const uint32_t tx_gpio;
+	const uint32_t rx_gpio;
+	const uint32_t bitrate;
 	const uint32_t clk_freq;
 	void (*irq_connect_func)(const struct device *dev);
 	void (*irq_enable_func)(const struct device *dev);
@@ -269,11 +272,10 @@ static int can_can2040_start(const struct device *dev)
 
 	LOG_DBG("Enable device %s %p, clock: %u", dev->name, (void *)&data->can2040, config->clk_freq);
 
-	// FIXME: use DT clock and pinctrl, as well as CAN API for bitrate
 	can2040_ll_data_state_clear_bits(&data->can2040);
-	data->can2040.gpio_rx = 4;
-	data->can2040.gpio_tx = 5;
-	can2040_ll_pio_set_clkdiv(&data->can2040, config->clk_freq, 1000000);
+	data->can2040.gpio_rx = config->rx_gpio;
+	data->can2040.gpio_tx = config->tx_gpio;
+	can2040_ll_pio_set_clkdiv(&data->can2040, config->clk_freq, config->bitrate);
 	can2040_ll_pio_sm_setup(&data->can2040);
 	can2040_ll_data_state_go_discard(&data->can2040);
 
@@ -340,7 +342,6 @@ static int can_can2040_get_state(const struct device *dev, enum can_state *state
 {
 	struct can_can2040_data *data = dev->data;
 
-	// TODO proper statistics
 	if (state != NULL) {
 		if (data->common.started) {
 			*state = CAN_STATE_ERROR_ACTIVE;
@@ -454,6 +455,9 @@ static int can_can2040_init(const struct device *dev)
 		.common = CAN_DT_DRIVER_CONFIG_INST_GET(inst, 0, CAN_CAN2040_MAX_BITRATE),	\
 		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),					\
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst), \
+		.tx_gpio = DT_INST_RPI_PICO_PIO_PIN_BY_NAME(inst, default, 0, tx_pins, 0),	\
+		.rx_gpio = DT_INST_RPI_PICO_PIO_PIN_BY_NAME(inst, default, 0, rx_pins, 0),	\
+		.bitrate = DT_INST_PROP(inst, bitrate),					\
 		.clk_freq = 150000000, /* FIXME */ \
 		.irq_connect_func = can_can2040_irq_connect_func_##n,			\
 		.irq_enable_func = can_can2040_irq_enable_func_##n,			\
