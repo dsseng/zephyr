@@ -454,7 +454,7 @@
 			status = "disabled";
 		};
 
-		fifo: sio-fifo@d0000000 {
+		ipm0: sio-fifo@d0000000 {
 			compatible = "raspberrypi,pico-sio-fifo";
 			reg = <0xd0000000 DT_SIZE_K(4) 0x40018000 DT_SIZE_K(4)>;
 			reg-names = "sio", "psm";
