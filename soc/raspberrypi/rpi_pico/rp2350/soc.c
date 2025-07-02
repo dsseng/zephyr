@@ -15,7 +15,6 @@
 #if CONFIG_SOC_RESET_HOOK
 #include <pico/runtime_init.h>
 
-
 void soc_reset_hook(void)
 {
 	runtime_init_per_core_enable_coprocessors();
