@@ -21,10 +21,6 @@
  */
 #include "rpi_pico2.dtsi"
 
-&led0 {
-    status = "okay";
-};
-
 / {
 	chosen {
 		zephyr,sram = &sram0;
@@ -80,4 +76,8 @@ gpio0_lo: &gpio0 {
 
 zephyr_udc0: &usbd {
 	status = "okay";
+};
+
+&led0 {
+    status = "okay";
 };
