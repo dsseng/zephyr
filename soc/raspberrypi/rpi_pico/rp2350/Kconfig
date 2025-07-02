@@ -27,6 +27,7 @@ config SOC_RP2350A_M33_CPU0
 	select CPU_HAS_ARM_MPU
 	select CPU_HAS_ARM_SAU
 	select CPU_HAS_FPU
+	select IPM
 
 config SOC_RP2350A_M33_CPU1
 	select ARM
@@ -37,6 +38,7 @@ config SOC_RP2350A_M33_CPU1
 	select CPU_HAS_ARM_MPU
 	select CPU_HAS_ARM_SAU
 	select CPU_HAS_FPU
+	select IPM
 
 config SOC_RP2350B_M33
 	select ARM
