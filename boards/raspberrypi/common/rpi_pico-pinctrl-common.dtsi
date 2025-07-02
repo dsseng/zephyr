@@ -14,7 +14,7 @@
 			input-enable;
 		};
 	};
-	
+
 	uart1_default: uart1_default {
 		group1 {
 			pinmux = <UART1_TX_P24>;
