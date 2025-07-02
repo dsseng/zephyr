@@ -126,10 +126,10 @@ static int rpi_pico_reset_cpu1(void)
 	return val == 0 ? 0 : -EIO;
 }
 
-static void rpi_pico_boot_cpu1(uint32_t vector_table_addr, uint32_t stack_ptr, uint32_t reset_ptr)
+static void rpi_pico_boot_cpu1(uint32_t vector_table_addr, uint32_t stack_ptr, uint32_t pc)
 {
 	/* We synchronise with CPU1 and then we can hand over the memory addresses. */
-	uint32_t cmds[] = {0, 0, 1, vector_table_addr, stack_ptr, reset_ptr};
+	uint32_t cmds[] = {0, 0, 1, vector_table_addr, stack_ptr, pc};
 	uint32_t seq = 0;
 
 	do {
