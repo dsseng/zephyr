@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "zephyr/drivers/ipm.h"
 #include <stdio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
@@ -20,6 +21,8 @@
  */
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
+static const struct device *ipm_dev;
+
 int main(void)
 {
 	int ret;
@@ -34,6 +37,12 @@ int main(void)
 		return 0;
 	}
 
+	ipm_dev = DEVICE_DT_GET(DT_NODELABEL(ipm0));
+	if (!ipm_dev) {
+		printk("Failed to get IPM device.\n\r");
+		return 0;
+	}
+
 	while (1) {
 		ret = gpio_pin_toggle_dt(&led);
 		if (ret < 0) {
@@ -42,6 +51,7 @@ int main(void)
 
 		led_state = !led_state;
 		printf("LED state: %s\n", led_state ? "ON" : "OFF");
+		ipm_send(ipm_dev, 0, 0x12345678 + led_state, 0, 0);
 		k_msleep(SLEEP_TIME_MS);
 	}
 	return 0;
