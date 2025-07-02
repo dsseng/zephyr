@@ -3,6 +3,7 @@
 
 config IPM_RPI_PICO
 	bool "Raspberry Pi Pico IPM Driver"
-	default y if DT_HAS_RPI_PICO_IPM_ENABLED
+	default y
+	depends on DT_HAS_RASPBERRYPI_PICO_SIO_FIFO_ENABLED
 	help
 	  This option enables the Raspberry Pi Pico Inter-process mailbox driver.
