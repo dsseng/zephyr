@@ -34,10 +34,54 @@ static struct rpi_pico_mailbox_config rpi_pico_mailbox_config = {
 };
 static struct rpi_pico_mailbox_data rpi_pico_mailbox_data;
 
+static inline void mailbox_put_blocking(uint32_t value)
+{
+	while (!(rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_RDY_BITS)) {
+		;
+	}
+
+	rpi_pico_mailbox_config.sio_regs->fifo_wr = value;
+
+	/* Inform other CPU about FIFO update. */
+	__SEV();
+}
+
+static inline uint32_t mailbox_pop_blocking(void)
+{
+	while (!(rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_VLD_BITS)) {
+		__WFE();
+	}
+
+	return rpi_pico_mailbox_config.sio_regs->fifo_rd;
+}
+
+static inline void mailbox_flush(void)
+{
+	/* Read all valid data from the mailbox. */
+	while (rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_VLD_BITS) {
+		(void)rpi_pico_mailbox_config.sio_regs->fifo_rd;
+	}
+}
+
 static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id, const void *data, int size)
 {
 	ARG_UNUSED(data);
-	ARG_UNUSED(size);
+
+	if (size != 0) {
+		return -EMSGSIZE;
+	}
+
+	if (id > UINT32_MAX) {
+		return -EINVAL;
+	}
+
+	struct rpi_pico_mailbox_config *config = (struct rpi_pico_mailbox_config *)dev->config;
+	if (!(config->sio_regs->fifo_st & SIO_FIFO_ST_RDY_BITS) && !wait) {
+		LOG_ERR("Mailbox FIFO is full, cannot send message");
+		return -EBUSY;
+	}
+
+	mailbox_put_blocking(id);
 
     return 0;
 }
@@ -69,37 +113,14 @@ static unsigned int rpi_pico_mailbox_max_id_val_get(const struct device *dev)
 static int rpi_pico_mailbox_set_enabled(const struct device *dev, int enable)
 {
 	ARG_UNUSED(dev);
-	ARG_UNUSED(enable);
+
+	if (enable) {
+		irq_enable(DT_INST_IRQN(0));
+	} else {
+		irq_disable(DT_INST_IRQN(0));
+	}
+
 	return 0;
-}
-
-static inline void mailbox_put_blocking(uint32_t value)
-{
-	while (!(rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_RDY_BITS)) {
-		;
-	}
-
-	rpi_pico_mailbox_config.sio_regs->fifo_wr = value;
-
-	/* Inform other CPU about FIFO update. */
-	__SEV();
-}
-
-static inline uint32_t mailbox_pop_blocking(void)
-{
-	while (!(rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_VLD_BITS)) {
-		__WFE();
-	}
-
-	return rpi_pico_mailbox_config.sio_regs->fifo_rd;
-}
-
-static inline void mailbox_flush(void)
-{
-	/* Read all valid data from the mailbox. */
-	while (rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_VLD_BITS) {
-		(void)rpi_pico_mailbox_config.sio_regs->fifo_rd;
-	}
 }
 
 static inline bool address_in_range(uint32_t addr, uint32_t base, uint32_t size)
@@ -148,6 +169,18 @@ static void rpi_pico_boot_cpu1(uint32_t vector_table_addr, uint32_t stack_ptr, u
 }
 
 static void rpi_pico_mailbox_isr(const struct device *dev) {
+	// Clear status
+    rpi_pico_mailbox_config.sio_regs->fifo_st = 0xff;
+
+	while (rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_VLD_BITS) {
+		uint32_t msg = rpi_pico_mailbox_config.sio_regs->fifo_rd;
+		LOG_DBG("Received message: 0x%08x", msg);
+		struct rpi_pico_mailbox_data *data = dev->data;
+		if (data->cb) {
+			// Only send the channel ID to the callback, no data.
+			data->cb(dev, data->user_data, msg, 0);
+		}
+	}
 }
 
 static int rpi_pico_mailbox_init(const struct device *dev)
@@ -192,12 +225,10 @@ static int rpi_pico_mailbox_init(const struct device *dev)
 
 #endif /* CONFIG_SOC_RP2350A_BOOT_CPU1 */
 
-	// // Initialize mbox
-	// IRQ_CONNECT(DT_INST_IRQ_BY_NAME(0, sio_irq_fifo, irq),
-	// 	DT_INST_IRQ_BY_NAME(0, sio_irq_fifo, priority),
-	// 	rpi_pico_mailbox_isr, DEVICE_DT_INST_GET(0), 0);
-
-	// irq_enable(DT_INST_IRQN(0));
+	// Initialize mbox for communication.
+	IRQ_CONNECT(DT_INST_IRQ_BY_NAME(0, sio_irq_fifo, irq),
+		DT_INST_IRQ_BY_NAME(0, sio_irq_fifo, priority),
+		rpi_pico_mailbox_isr, DEVICE_DT_INST_GET(0), 0);
 
 	return 0;
 }
