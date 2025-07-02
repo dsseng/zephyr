@@ -22,6 +22,8 @@
 #include "rpi_pico2.dtsi"
 #include "rpi_pico2_split.dtsi"
 
+/delete-node/ &cpu0;
+
 / {
 	chosen {
 		zephyr,sram = &sram0_cpu1;
