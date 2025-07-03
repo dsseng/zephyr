@@ -8,3 +8,4 @@ config NET_CORE_BOARD
 string
 	default "nrf5340dk/nrf5340/cpunet" if $(BOARD) = "nrf5340dk"
 	default "nrf5340bsim/nrf5340/cpunet" if $(BOARD) = "nrf5340bsim"
+	default "rpi_pico2/rp2350a/m33_cpu1" if $(BOARD) = "rpi_pico2"
