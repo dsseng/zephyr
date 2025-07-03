@@ -75,7 +75,7 @@ static int mbox_ipm_send(const struct device *dev, uint32_t channel,
 	}
 
 	const struct mbox_ipm_conf *conf = dev->config;
-	ipm_send(conf->ipm_dev, 0, channel, 0, 0);
+	ipm_send(conf->ipm_dev, 1, channel, 0, 0);
 
 	return 0;
 }
