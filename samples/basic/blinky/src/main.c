@@ -23,6 +23,10 @@ static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
 static const struct device *ipm_dev;
 
+void cb(const struct device *ipmdev, void *user_data, uint32_t id, volatile void *data) {
+	printf("IPM callback called with id: 0x%08x, data: %p\n", id, data);
+}
+
 int main(void)
 {
 	int ret;
@@ -42,6 +46,8 @@ int main(void)
 		printk("Failed to get IPM device.\n\r");
 		return 0;
 	}
+
+	ipm_register_callback(ipm_dev, cb, NULL);
 
 	while (1) {
 		ret = gpio_pin_toggle_dt(&led);

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "zephyr/drivers/ipm.h"
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -20,6 +21,18 @@ LOG_MODULE_REGISTER(uvc_sample, LOG_LEVEL_INF);
 const struct device *const uvc_dev = DEVICE_DT_GET(DT_NODELABEL(uvc));
 const struct device *const video_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera));
 
+static const struct device *ipm_dev;
+
+static void ipm_receive_callback(const struct device *ipmdev, void *user_data, uint32_t id,
+				 volatile void *data)
+{
+	ARG_UNUSED(ipmdev);
+	ARG_UNUSED(user_data);
+
+	LOG_WRN("Received message: 0x%08x", id);
+	ipm_send(ipmdev, 1, 22, 0, 0);
+}
+
 int main(void)
 {
 	struct usbd_context *sample_usbd;
@@ -31,6 +44,14 @@ int main(void)
 	k_timeout_t timeout = K_FOREVER;
 	size_t bsize;
 	int ret;
+
+	ipm_dev = DEVICE_DT_GET(DT_NODELABEL(ipm0));
+	if (!ipm_dev) {
+		printk("Failed to get IPM device.\n\r");
+		return 0;
+	}
+
+	ipm_register_callback(ipm_dev, ipm_receive_callback, NULL);
 
 	if (!device_is_ready(video_dev)) {
 		LOG_ERR("video source %s failed to initialize", video_dev->name);
