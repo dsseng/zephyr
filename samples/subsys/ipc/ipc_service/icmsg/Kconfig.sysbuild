@@ -12,3 +12,4 @@ string
 	default "nrf54lm20dk/nrf54lm20a/cpuflpr" if $(BOARD) = "nrf54lm20dk"
 	default "stm32h747i_disco/stm32h747xx/m4" if $(BOARD) = "stm32h747i_disco"
 	default "ek_ra8p1/r7ka8p1kflcac/cm33" if $(BOARD) = "ek_ra8p1"
+	default "rpi_pico2/rp2350a/m33/cpu1" if $(BOARD) = "rpi_pico2"
