@@ -207,9 +207,9 @@ static int rpi_pico_mailbox_init(const struct device *dev)
 		return -EINVAL;
 	}
 
-	LOG_WRN("CPU1 vector table at 0x%p", cpu1_vector_table);
-	LOG_WRN("CPU1 stack pointer at 0x%08x", cpu1_stack_ptr);
-	LOG_WRN("CPU1 reset pointer at 0x%08x", cpu1_reset_ptr);
+	LOG_DBG("CPU1 vector table at 0x%p", cpu1_vector_table);
+	LOG_DBG("CPU1 stack pointer at 0x%08x", cpu1_stack_ptr);
+	LOG_DBG("CPU1 reset pointer at 0x%08x", cpu1_reset_ptr);
 
 	if (rpi_pico_reset_cpu1() != 0) {
 		LOG_ERR("CPU1 reset failed.");
