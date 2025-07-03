@@ -164,14 +164,12 @@ static void rpi_pico_boot_cpu1(uint32_t vector_table_addr, uint32_t stack_ptr, u
 }
 
 static void rpi_pico_mailbox_isr(const struct device *dev) {
-	LOG_WRN("ISR");
-
 	// Clear status
     rpi_pico_mailbox_config.sio_regs->fifo_st = 0xff;
 
 	while (rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_VLD_BITS) {
 		uint32_t msg = rpi_pico_mailbox_config.sio_regs->fifo_rd;
-		LOG_WRN("Received message: 0x%08x", msg);
+		LOG_DBG("Received message: 0x%08x", msg);
 		struct rpi_pico_mailbox_data *data = dev->data;
 		if (data->cb) {
 			// Only send the channel ID to the callback, no data.
