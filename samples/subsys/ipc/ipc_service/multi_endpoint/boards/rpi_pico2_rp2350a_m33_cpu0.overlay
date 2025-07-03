@@ -1,0 +1,59 @@
+/*
+ * Copyright (c) 2025 Dmitrii Sharshakov <d3dx12.xx@gmail.com>
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	reserved-memory {
+		/delete-node/ sram8;
+		/delete-node/ sram9;
+
+		sram_ipc0_tx: memory@20080000 {
+			reg = <0x20080000 DT_SIZE_K(2)>;
+		};
+
+		sram_ipc0_rx: memory@20080800 {
+			reg = <0x20080800 DT_SIZE_K(2)>;
+		};
+
+		sram_ipc1_tx: memory@20081000 {
+			reg = <0x20081000 DT_SIZE_K(2)>;
+		};
+
+		sram_ipc1_rx: memory@20081800 {
+			reg = <0x20081800 DT_SIZE_K(2)>;
+		};
+	};
+
+	ipc {
+		ipc0: ipc0 {
+			compatible = "zephyr,ipc-icmsg-me-initiator";
+			tx-region = <&sram_ipc0_tx>;
+			rx-region = <&sram_ipc0_rx>;
+			dcache-alignment = <32>;
+			mboxes = <&mbox 0>, <&mbox 1>;
+			mbox-names = "tx", "rx";
+			status = "okay";
+		};
+
+		ipc1: ipc1 {
+			compatible = "zephyr,ipc-icmsg-me-initiator";
+			tx-region = <&sram_ipc1_tx>;
+			rx-region = <&sram_ipc1_rx>;
+			dcache-alignment = <32>;
+			mboxes = <&mbox 2>, <&mbox 3>;
+			mbox-names = "tx", "rx";
+			status = "okay";
+		};
+	};
+};
+
+&ipm0 {
+	mbox: ipm-mbox {
+		compatible = "zephyr,ipm-mbox";
+		#mbox-cells = <1>;
+		channels = <4>;
+		status = "okay";
+	};
+};
