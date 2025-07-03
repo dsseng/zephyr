@@ -28,6 +28,8 @@
 	chosen {
 		zephyr,sram = &sram0_cpu0;
 		zephyr,flash = &flash0;
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
 		// TODO: partition the flash
 		// zephyr,code-partition = &code_partition_cpu0;
 	};
@@ -35,6 +37,10 @@
 	aliases {
 		watchdog0 = &wdt0;
 	};
+};
+
+pico_serial: &uart0 {
+	status = "okay";
 };
 
 &flash0 {
@@ -68,10 +74,3 @@
 &wdt0 {
 	status = "okay";
 };
-
-zephyr_udc0: &usbd {
-	status = "okay";
-};
-
-// Let CPU1 use USB, while CPU0 uses UART0
-#include <../boards/common/usb/cdc_acm_serial.dtsi>
