@@ -27,14 +27,17 @@
 / {
 	chosen {
 		zephyr,sram = &sram0_cpu1;
+		zephyr,console = &uart1;
+		zephyr,shell-uart = &uart1;
 		// TODO: partition the flash
 		// zephyr,code-partition = &code_partition_cpu1;
 	};
 };
 
-zephyr_udc0: &usbd {
+&uart1 {
 	status = "okay";
 };
 
-// Let CPU1 use USB, while CPU0 uses UART0
-#include <../boards/common/usb/cdc_acm_serial.dtsi>
+zephyr_udc0: &usbd {
+	status = "okay";
+};

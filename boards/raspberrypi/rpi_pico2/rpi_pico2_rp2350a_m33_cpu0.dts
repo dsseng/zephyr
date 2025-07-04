@@ -39,15 +39,15 @@
 	};
 };
 
+&uart0 {
+	status = "okay";
+};
+
 gpio0_lo: &gpio0 {
 	status = "okay";
 };
 
 &led0 {
-	status = "okay";
-};
-
-pico_serial: &uart0 {
 	status = "okay";
 };
 
