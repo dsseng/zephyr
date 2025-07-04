@@ -51,11 +51,11 @@ static void mbox_dispatcher(const struct device *ipmdev, void *user_data,
 	const struct device *dev = data->dev;
 
 	if (!is_rx_channel_valid(dev, id)) {
-		LOG_WRN("RX event on illegal channel");
+		LOG_WRN("RX event on illegal channel %u", id);
 	}
 
 	if (!(data->enabled_mask & BIT(id))) {
-		LOG_WRN("RX event on disabled channel");
+		LOG_WRN("RX event on disabled channel %u", id);
 	}
 
 	if (data->cb[id] != NULL) {
@@ -75,7 +75,7 @@ static int mbox_ipm_send(const struct device *dev, uint32_t channel,
 	}
 
 	const struct mbox_ipm_conf *conf = dev->config;
-	ipm_send(conf->ipm_dev, 1, channel, 0, 0);
+	ipm_send(conf->ipm_dev, true, channel, NULL, 0);
 
 	return 0;
 }
@@ -120,7 +120,7 @@ static int mbox_ipm_set_enabled(const struct device *dev, uint32_t channel, bool
 	}
 
 	if (enable && (data->cb[channel] == NULL)) {
-		LOG_WRN("Enabling channel without a registered callback\n");
+		LOG_WRN("Enabling channel %d without a registered callback\n", channel);
 	}
 
 	if (enable) {
