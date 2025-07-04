@@ -32,14 +32,6 @@
 	};
 };
 
-gpio0_lo: &gpio0 {
-	status = "okay";
-};
-
-&led0 {
-	status = "okay";
-};
-
 zephyr_udc0: &usbd {
 	status = "okay";
 };
