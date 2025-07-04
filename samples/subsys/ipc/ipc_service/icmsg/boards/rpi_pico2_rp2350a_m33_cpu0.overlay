@@ -14,7 +14,7 @@
 			reg = <0x20080000 DT_SIZE_K(4)>;
 		};
 
-		sram_rx: memory@20080800 {
+		sram_rx: memory@20081000 {
 			zephyr,memory-region = "SRAM_RX";
 			reg = <0x20081000 DT_SIZE_K(4)>;
 		};
