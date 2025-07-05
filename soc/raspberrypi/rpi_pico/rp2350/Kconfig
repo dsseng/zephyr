@@ -60,3 +60,18 @@ config RP2_REQUIRES_IMAGE_DEFINITION_BLOCK
 	help
 	  Include an Image Definition Block (IMAGE_DEF) to enable the bootroom in
 	  RP23XX devices to consider this a valid image in flash.
+
+# If a code partition is defined for the CPU1 core,
+# make sure we relocate the code to be stored in that partition
+# Use image-source to make init code copy this to the RAM
+# Running CPU1 from flash is not recommended due to
+# access conflicts with CPU0 writes, so prefer a flash code partition
+# and `execution-memory` in SRAM.
+DT_CHOSEN_CODE_PARTITION = zephyr,code-partition
+DT_CHOSEN_SRAM = zephyr,sram
+
+config BUILD_OUTPUT_ADJUST_LMA
+	default "$(dt_chosen_partition_addr_hex,$(DT_CHOSEN_CODE_PARTITION)) - \
+		 $(dt_chosen_reg_addr_hex,$(DT_CHOSEN_SRAM))" if SOC_RP2350A_M33_CPU1 && \
+			$(dt_chosen_enabled,$(DT_CHOSEN_CODE_PARTITION)) && \
+			$(dt_chosen_enabled,$(DT_CHOSEN_SRAM))
