@@ -44,10 +44,10 @@ static inline bool is_tx_channel_valid(const struct device *dev, uint32_t ch)
 	return ch < MBOX_IPM_CHANNELS;
 }
 
-static void mbox_dispatcher(const struct device *ipmdev, void *user_data,
-			       uint32_t id, volatile void *mbox_data)
+static void mbox_dispatcher(const struct device *ipmdev, void *user_data, uint32_t id,
+			    volatile void *mbox_data)
 {
-	struct mbox_ipm_data *data = (struct mbox_ipm_data *) user_data;
+	struct mbox_ipm_data *data = (struct mbox_ipm_data *)user_data;
 	const struct device *dev = data->dev;
 
 	if (!is_rx_channel_valid(dev, id)) {
@@ -63,8 +63,7 @@ static void mbox_dispatcher(const struct device *ipmdev, void *user_data,
 	}
 }
 
-static int mbox_ipm_send(const struct device *dev, uint32_t channel,
-			 const struct mbox_msg *msg)
+static int mbox_ipm_send(const struct device *dev, uint32_t channel, const struct mbox_msg *msg)
 {
 	if (msg) {
 		LOG_WRN("Sending data not supported");
@@ -117,7 +116,7 @@ static int mbox_ipm_set_enabled(const struct device *dev, uint32_t channel, bool
 	}
 
 	if ((enable == 0 && (!(data->enabled_mask & BIT(channel)))) ||
-	    (enable != 0 &&   (data->enabled_mask & BIT(channel)))) {
+	    (enable != 0 && (data->enabled_mask & BIT(channel)))) {
 		return -EALREADY;
 	}
 
@@ -143,7 +142,7 @@ static int mbox_ipm_init(const struct device *dev)
 
 	data->dev = dev;
 
-	ipm_register_callback(conf->ipm_dev, mbox_dispatcher, (void *) data);
+	ipm_register_callback(conf->ipm_dev, mbox_dispatcher, (void *)data);
 
 	return 0;
 }
@@ -156,6 +155,5 @@ static DEVICE_API(mbox, mbox_ipm_driver_api) = {
 	.set_enabled = mbox_ipm_set_enabled,
 };
 
-DEVICE_DT_INST_DEFINE(0, mbox_ipm_init, NULL, &ipm_mbox_data, &ipm_mbox_conf,
-		    POST_KERNEL, CONFIG_MBOX_INIT_PRIORITY,
-		    &mbox_ipm_driver_api);
+DEVICE_DT_INST_DEFINE(0, mbox_ipm_init, NULL, &ipm_mbox_data, &ipm_mbox_conf, POST_KERNEL,
+		      CONFIG_MBOX_INIT_PRIORITY, &mbox_ipm_driver_api);
