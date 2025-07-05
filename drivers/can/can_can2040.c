@@ -11,22 +11,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "zephyr/device.h"
-#include "zephyr/devicetree.h"
-#include "zephyr/devicetree/clocks.h"
-#include "zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h"
-#include "zephyr/drivers/pinctrl.h"
-#include <stdint.h>
 #define DT_DRV_COMPAT can2040_can2040
 
 #include <zephyr/drivers/can.h>
+#include <zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/util.h>
-#include <zephyr/irq.h>
 
 #include "can2040_ll.h"
-
-#define CONFIG_CAN_MAX_FILTER 16
 
 LOG_MODULE_REGISTER(can_can2040, CONFIG_CAN_LOG_LEVEL);
 
@@ -61,10 +53,8 @@ struct can_can2040_data {
 	struct k_sem tx_idle;
 };
 
-static int can_can2040_send(const struct device *dev,
-			     const struct can_frame *frame,
-			     k_timeout_t timeout, can_tx_callback_t callback,
-			     void *user_data)
+static int can_can2040_send(const struct device *dev, const struct can_frame *frame,
+			    k_timeout_t timeout, can_tx_callback_t callback, void *user_data)
 {
 	struct can_can2040_data *data = dev->data;
 	int ret;
@@ -73,9 +63,8 @@ static int can_can2040_send(const struct device *dev,
 		return -EAGAIN;
 	}
 
-	LOG_DBG("Sending %d bytes on %s. Id: 0x%x, ID type: %s %s",
-		frame->dlc, dev->name, frame->id,
-		(frame->flags & CAN_FRAME_IDE) != 0 ? "extended" : "standard",
+	LOG_DBG("Sending %d bytes on %s. Id: 0x%x, ID type: %s %s", frame->dlc, dev->name,
+		frame->id, (frame->flags & CAN_FRAME_IDE) != 0 ? "extended" : "standard",
 		(frame->flags & CAN_FRAME_RTR) != 0 ? ", RTR frame" : "");
 
 	if ((frame->flags & ~(CAN_FRAME_IDE | CAN_FRAME_RTR)) != 0) {
@@ -97,8 +86,7 @@ static int can_can2040_send(const struct device *dev,
 	tx.id = frame->id;
 	tx.id |= (frame->flags & CAN_FRAME_IDE) ? CAN2040_ID_EFF : 0;
 	tx.id |= (frame->flags & CAN_FRAME_RTR) ? CAN2040_ID_RTR : 0;
-	LOG_DBG("TX frame: id=0x%x, dlc=%d, flags=0x%02x",
-		tx.id, tx.dlc, frame->flags);
+	LOG_DBG("TX frame: id=0x%x, dlc=%d, flags=0x%02x", tx.id, tx.dlc, frame->flags);
 	memcpy(tx.data, frame->data, frame->dlc);
 
 	data->tx_cb = callback;
@@ -113,7 +101,6 @@ static int can_can2040_send(const struct device *dev,
 	return 0;
 }
 
-
 static inline int get_free_filter(struct can_can2040_filter *filters)
 {
 	for (int i = 0; i < CONFIG_CAN_MAX_FILTER; i++) {
@@ -125,14 +112,14 @@ static inline int get_free_filter(struct can_can2040_filter *filters)
 	return -ENOSPC;
 }
 
-static int can_can2040_add_rx_filter(const struct device *dev, can_rx_callback_t cb,
-				      void *cb_arg, const struct can_filter *filter)
+static int can_can2040_add_rx_filter(const struct device *dev, can_rx_callback_t cb, void *cb_arg,
+				     const struct can_filter *filter)
 {
 	struct can_can2040_data *data = dev->data;
 	struct can_can2040_filter *filter_entry;
 	int filter_id;
 
-	LOG_DBG("Setting filter ID: 0x%x, mask: 0x%x", filter->id, filter->mask);
+	LOG_DBG("Adding filter ID: 0x%x, mask: 0x%x", filter->id, filter->mask);
 
 	if ((filter->flags & ~(CAN_FILTER_IDE)) != 0) {
 		LOG_ERR("unsupported CAN filter flags 0x%02x", filter->flags);
@@ -153,6 +140,7 @@ static int can_can2040_add_rx_filter(const struct device *dev, can_rx_callback_t
 	filter_entry->cb_arg = cb_arg;
 	filter_entry->filter = *filter;
 	// Add callback the last, so we don't call it before the filter is fully set up
+	// Do this because we cannot lock mutex in ISR
 	filter_entry->rx_cb = cb;
 	k_mutex_unlock(&data->filters_mtx);
 
@@ -186,7 +174,8 @@ static int can_can2040_get_capabilities(const struct device *dev, can_mode_t *ca
 	return 0;
 }
 
-static void can_can2040_tx_done(const struct device *dev, int status) {
+static void can_can2040_tx_done(const struct device *dev, int status)
+{
 	struct can_can2040_data *data = dev->data;
 	can_tx_callback_t callback = data->tx_cb;
 	void *user_data = data->tx_cb_arg;
@@ -198,26 +187,25 @@ static void can_can2040_tx_done(const struct device *dev, int status) {
 	k_sem_give(&data->tx_idle);
 }
 
-static void can_can2040_handle_rx(const struct device *dev, struct can2040_msg *msg) {
+static void can_can2040_handle_rx(const struct device *dev, struct can2040_msg *msg)
+{
 	struct can_can2040_data *data = dev->data;
 
 	struct can_frame frame = {
 		.id = msg->id & CAN_EXT_ID_MASK,
 		.dlc = msg->dlc,
 		.flags = ((msg->id & CAN2040_ID_EFF) ? CAN_FRAME_IDE : 0) |
-					((msg->id & CAN2040_ID_RTR) ? CAN_FRAME_RTR : 0),
+			 ((msg->id & CAN2040_ID_RTR) ? CAN_FRAME_RTR : 0),
 	};
 	memcpy(frame.data, msg->data, frame.dlc);
 
-	LOG_DBG("Received frame: id=0x%x, dlc=%d, flags=0x%02x",
-		frame.id, frame.dlc, frame.flags);
+	LOG_DBG("Received frame: id=0x%x, dlc=%d, flags=0x%02x", frame.id, frame.dlc, frame.flags);
 
 	struct can_can2040_filter *filter;
 	// SAFETY: cannot lock mutex in ISR
 	for (int i = 0; i < CONFIG_CAN_MAX_FILTER; i++) {
 		filter = &data->filters[i];
-		if (filter->rx_cb != NULL &&
-			can_frame_matches_filter(&frame, &filter->filter)) {
+		if (filter->rx_cb != NULL && can_frame_matches_filter(&frame, &filter->filter)) {
 			LOG_DBG("rx->receive");
 			filter->rx_cb(dev, &frame, filter->cb_arg);
 		}
@@ -225,12 +213,11 @@ static void can_can2040_handle_rx(const struct device *dev, struct can2040_msg *
 }
 
 // Called from an ISR
-static void
-can_can2040_callback(struct can2040 *can2040_dev, uint32_t notify, struct can2040_msg *msg)
+static void can_can2040_callback(struct can2040 *can2040_dev, uint32_t notify,
+				 struct can2040_msg *msg)
 {
 	const struct device *dev = can2040_dev->rx_cb_user_data;
 	struct can_can2040_data *data = dev->data;
-	LOG_DBG("can2040_cb (%s): notify=0x%08x, msg->id=0x%08x, msg->dlc=%d", dev->name, notify, msg->id, msg->dlc);
 
 	if (notify & CAN2040_NOTIFY_RX) {
 		can_can2040_handle_rx(dev, msg);
@@ -242,14 +229,13 @@ can_can2040_callback(struct can2040 *can2040_dev, uint32_t notify, struct can204
 			can_can2040_handle_rx(dev, msg);
 		}
 	} else if (notify & CAN2040_NOTIFY_ERROR) {
-		LOG_WRN("Bus error notification received");
+		LOG_WRN("Bus error notification received, some received frames may be lost");
 	}
 }
 
 static void can_can2040_pio_irq_handler(const struct device *dev)
 {
 	struct can_can2040_data *data = dev->data;
-	// LOG_DBG("IRQ %s %p", dev->name, (void *)&data->can2040);
 	can2040_pio_irq_handler(&data->can2040);
 }
 
@@ -269,10 +255,9 @@ static int can_can2040_start(const struct device *dev)
 
 	CAN_STATS_RESET(dev);
 
-	config->irq_connect_func(dev);
 	config->irq_enable_func(dev);
 
-	LOG_DBG("Enable device %s %p, clock: %u", dev->name, (void *)&data->can2040, config->clk_freq);
+	LOG_DBG("Enable device %s, clock: %u", dev->name, config->clk_freq);
 
 	can2040_ll_data_state_clear_bits(&data->can2040);
 	data->can2040.gpio_rx = config->rx_gpio;
@@ -323,8 +308,7 @@ static int can_can2040_set_mode(const struct device *dev, can_mode_t mode)
 	return 0;
 }
 
-static int can_can2040_set_timing(const struct device *dev,
-				   const struct can_timing *timing)
+static int can_can2040_set_timing(const struct device *dev, const struct can_timing *timing)
 {
 	struct can_can2040_data *data = dev->data;
 
@@ -338,7 +322,7 @@ static int can_can2040_set_timing(const struct device *dev,
 }
 
 static int can_can2040_get_state(const struct device *dev, enum can_state *state,
-				  struct can_bus_err_cnt *err_cnt)
+				 struct can_bus_err_cnt *err_cnt)
 {
 	struct can_can2040_data *data = dev->data;
 
@@ -359,8 +343,7 @@ static int can_can2040_get_state(const struct device *dev, enum can_state *state
 }
 
 static void can_can2040_set_state_change_callback(const struct device *dev,
-						   can_state_change_callback_t cb,
-						   void *user_data)
+						  can_state_change_callback_t cb, void *user_data)
 {
 	ARG_UNUSED(dev);
 	ARG_UNUSED(cb);
@@ -398,25 +381,15 @@ static DEVICE_API(can, can_can2040_driver_api) = {
 	.get_core_clock = can_can2040_get_core_clock,
 	.get_max_filters = can_can2040_get_max_filters,
 	/* Recommended configuration ranges from CiA 601-2 */
-	.timing_min = {
-		.sjw = 1,
-		.prop_seg = 0,
-		.phase_seg1 = 2,
-		.phase_seg2 = 2,
-		.prescaler = 1
-	},
-	.timing_max = {
-		.sjw = 128,
-		.prop_seg = 0,
-		.phase_seg1 = 256,
-		.phase_seg2 = 128,
-		.prescaler = 32
-	},
+	.timing_min = {.sjw = 1, .prop_seg = 0, .phase_seg1 = 2, .phase_seg2 = 2, .prescaler = 1},
+	.timing_max =
+		{.sjw = 128, .prop_seg = 0, .phase_seg1 = 256, .phase_seg2 = 128, .prescaler = 32},
 };
 
 static int can_can2040_init(const struct device *dev)
 {
 	struct can_can2040_data *data = dev->data;
+	const struct can_can2040_config *config = dev->config;
 
 	k_mutex_init(&data->filters_mtx);
 	k_sem_init(&data->tx_idle, 1, 1);
@@ -425,51 +398,48 @@ static int can_can2040_init(const struct device *dev)
 		data->filters[i].rx_cb = NULL;
 	}
 
+	config->irq_connect_func(dev);
+
 	return 0;
 }
 
-#define CAN_CAN2040_MAX_BITRATE 1000000
-
-#define CAN_CAN2040_INIT(inst)									\
-	PINCTRL_DT_INST_DEFINE(inst);								\
-	static void can_can2040_irq_connect_func_##n(const struct device *dev)		\
-	{										\
-		IRQ_CONNECT(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq),\
-				DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, priority),\
-				can_can2040_pio_irq_handler,					\
-			    DEVICE_DT_INST_GET(inst),					\
-			    0);								\
-	}					 	\
-	\
-	static void can_can2040_irq_enable_func_##n(const struct device *dev)		\
-	{										\
-		irq_enable(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq));\
-	}					 	\
-	\
-	static void can_can2040_irq_disable_func_##n(const struct device *dev)		\
-	{				\
-		irq_disable(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq));\
-	}					 	\
-	\
-	static const struct can_can2040_config can_can2040_config_##inst = {			\
-		.common = CAN_DT_DRIVER_CONFIG_INST_GET(inst, 0, CAN_CAN2040_MAX_BITRATE),	\
-		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),					\
-		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst), \
-		.tx_gpio = DT_INST_RPI_PICO_PIO_PIN_BY_NAME(inst, default, 0, tx_pins, 0),	\
-		.rx_gpio = DT_INST_RPI_PICO_PIO_PIN_BY_NAME(inst, default, 0, rx_pins, 0),	\
-		.bitrate = DT_INST_PROP(inst, bitrate),					\
-		.clk_freq = DT_PROP(DT_INST_CLOCKS_CTLR_BY_NAME(0, sys), clock_frequency), \
-		.irq_connect_func = can_can2040_irq_connect_func_##n,			\
-		.irq_enable_func = can_can2040_irq_enable_func_##n,			\
-		.irq_disable_func = can_can2040_irq_disable_func_##n,	    \
-	};											\
-												\
-	static struct can_can2040_data can_can2040_data_##inst;				\
-												\
-	CAN_DEVICE_DT_INST_DEFINE(inst, can_can2040_init, NULL,				\
-				  &can_can2040_data_##inst,					\
-				  &can_can2040_config_##inst,					\
-				  POST_KERNEL, CONFIG_CAN_INIT_PRIORITY,			\
-				  &can_can2040_driver_api);
+#define CAN_CAN2040_INIT(inst)                                                                     \
+	PINCTRL_DT_INST_DEFINE(inst);                                                              \
+	static void can_can2040_irq_connect_func_##n(const struct device *dev)                     \
+	{                                                                                          \
+		IRQ_CONNECT(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq),                       \
+			    DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, priority),                  \
+			    can_can2040_pio_irq_handler, DEVICE_DT_INST_GET(inst), 0);             \
+	}                                                                                          \
+                                                                                                   \
+	static void can_can2040_irq_enable_func_##n(const struct device *dev)                      \
+	{                                                                                          \
+		irq_enable(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq));                       \
+	}                                                                                          \
+                                                                                                   \
+	static void can_can2040_irq_disable_func_##n(const struct device *dev)                     \
+	{                                                                                          \
+		irq_disable(DT_IRQ_BY_NAME(DT_INST_PARENT(inst), irq0, irq));                      \
+	}                                                                                          \
+                                                                                                   \
+	static const struct can_can2040_config can_can2040_config_##inst = {                       \
+		.common = CAN_DT_DRIVER_CONFIG_INST_GET(inst, DT_INST_PROP(inst, bitrate),         \
+							DT_INST_PROP(inst, bitrate)),              \
+		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),                                     \
+		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),                                      \
+		.tx_gpio = DT_INST_RPI_PICO_PIO_PIN_BY_NAME(inst, default, 0, tx_pins, 0),         \
+		.rx_gpio = DT_INST_RPI_PICO_PIO_PIN_BY_NAME(inst, default, 0, rx_pins, 0),         \
+		.bitrate = DT_INST_PROP(inst, bitrate),                                            \
+		.clk_freq = DT_PROP(DT_INST_CLOCKS_CTLR_BY_NAME(0, sys), clock_frequency),         \
+		.irq_connect_func = can_can2040_irq_connect_func_##n,                              \
+		.irq_enable_func = can_can2040_irq_enable_func_##n,                                \
+		.irq_disable_func = can_can2040_irq_disable_func_##n,                              \
+	};                                                                                         \
+                                                                                                   \
+	static struct can_can2040_data can_can2040_data_##inst;                                    \
+                                                                                                   \
+	CAN_DEVICE_DT_INST_DEFINE(inst, can_can2040_init, NULL, &can_can2040_data_##inst,          \
+				  &can_can2040_config_##inst, POST_KERNEL,                         \
+				  CONFIG_CAN_INIT_PRIORITY, &can_can2040_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(CAN_CAN2040_INIT)
