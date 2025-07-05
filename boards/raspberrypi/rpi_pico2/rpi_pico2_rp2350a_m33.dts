@@ -132,7 +132,8 @@ zephyr_udc0: &usbd {
 	can2040: can2040 {
 		compatible = "can2040,can2040";
 		status = "okay";
-		clocks = <&clocks RPI_PICO_CLKID_CLK_SYS>;
+		clocks = <&clk_sys>;
+		clock-names = "sys";
 		pinctrl-0 = <&can2040_default>;
 		pinctrl-names = "default";
 		bitrate = <1000000>;

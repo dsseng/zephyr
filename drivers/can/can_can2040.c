@@ -12,6 +12,8 @@
  */
 
 #include "zephyr/device.h"
+#include "zephyr/devicetree.h"
+#include "zephyr/devicetree/clocks.h"
 #include "zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h"
 #include "zephyr/drivers/pinctrl.h"
 #include <stdint.h>
@@ -332,8 +334,6 @@ static int can_can2040_set_timing(const struct device *dev,
 		return -EBUSY;
 	}
 
-	// TODO if it is possible to get bitrate from timing
-
 	return 0;
 }
 
@@ -458,7 +458,7 @@ static int can_can2040_init(const struct device *dev)
 		.tx_gpio = DT_INST_RPI_PICO_PIO_PIN_BY_NAME(inst, default, 0, tx_pins, 0),	\
 		.rx_gpio = DT_INST_RPI_PICO_PIO_PIN_BY_NAME(inst, default, 0, rx_pins, 0),	\
 		.bitrate = DT_INST_PROP(inst, bitrate),					\
-		.clk_freq = 150000000, /* FIXME */ \
+		.clk_freq = DT_PROP(DT_INST_CLOCKS_CTLR_BY_NAME(0, sys), clock_frequency), \
 		.irq_connect_func = can_can2040_irq_connect_func_##n,			\
 		.irq_enable_func = can_can2040_irq_enable_func_##n,			\
 		.irq_disable_func = can_can2040_irq_disable_func_##n,	    \
