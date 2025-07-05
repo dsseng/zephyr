@@ -10,7 +10,6 @@
 
 #define DT_DRV_COMPAT raspberrypi_pico_sio_fifo
 
-
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/ipm.h>
@@ -60,7 +59,8 @@ static inline uint32_t rpi_pico_mailbox_pop_blocking(void)
 	return rpi_pico_mailbox_config.sio_regs->fifo_rd;
 }
 
-static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id, const void *data, int size)
+static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id, const void *data,
+				 int size)
 {
 	ARG_UNUSED(data);
 
@@ -80,10 +80,11 @@ static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id
 
 	rpi_pico_mailbox_put_blocking(id);
 
-    return 0;
+	return 0;
 }
 
-static void rpi_pico_mailbox_register_callback(const struct device *dev, ipm_callback_t cb, void *user_data)
+static void rpi_pico_mailbox_register_callback(const struct device *dev, ipm_callback_t cb,
+					       void *user_data)
 {
 	struct rpi_pico_mailbox_data *data = dev->data;
 
@@ -120,9 +121,10 @@ static int rpi_pico_mailbox_set_enabled(const struct device *dev, int enable)
 	return 0;
 }
 
-static void rpi_pico_mailbox_isr(const struct device *dev) {
+static void rpi_pico_mailbox_isr(const struct device *dev)
+{
 	/* Clear status */
-    rpi_pico_mailbox_config.sio_regs->fifo_st = 0xff;
+	rpi_pico_mailbox_config.sio_regs->fifo_st = 0xff;
 
 	while (rpi_pico_mailbox_config.sio_regs->fifo_st & SIO_FIFO_ST_VLD_BITS) {
 		uint32_t msg = rpi_pico_mailbox_config.sio_regs->fifo_rd;
@@ -186,7 +188,8 @@ static inline bool address_in_range(uint32_t addr, uint32_t base, uint32_t size)
 	return addr >= base && addr < base + size;
 }
 
-static inline int rpi_pico_validate_image(uint32_t cpu1_sp, uint32_t cpu1_pc) {
+static inline int rpi_pico_validate_image(uint32_t cpu1_sp, uint32_t cpu1_pc)
+{
 #if DT_INST_NODE_HAS_PROP(0, memory_region)
 	/* Make sure sp is within available RAM, and pc is within the image. */
 	uint32_t sram_start = DT_REG_ADDR(DT_INST_PHANDLE(0, memory_region));
@@ -202,11 +205,8 @@ static inline int rpi_pico_validate_image(uint32_t cpu1_sp, uint32_t cpu1_pc) {
 #endif /* DT_INST_NODE_HAS_PROP(0, memory_region) */
 
 	/* Initial program counter shall point to code within the CPU1 partition. */
-	if (!address_in_range(
-		cpu1_pc,
-		DT_REG_ADDR(DT_INST_PHANDLE(0, execution_memory)),
-		DT_REG_SIZE(DT_INST_PHANDLE(0, execution_memory))
-	)) {
+	if (!address_in_range(cpu1_pc, DT_REG_ADDR(DT_INST_PHANDLE(0, execution_memory)),
+			      DT_REG_SIZE(DT_INST_PHANDLE(0, execution_memory)))) {
 		LOG_ERR("CPU1 reset pointer 0x%08x invalid.", cpu1_pc);
 		return -EINVAL;
 	} else {
@@ -222,26 +222,26 @@ static int rpi_pico_mailbox_init(const struct device *dev)
 	/* Boot CPU1 if provided a memory region */
 #if DT_INST_NODE_HAS_PROP(0, execution_memory)
 #if DT_INST_NODE_HAS_PROP(0, image_source)
-	BUILD_ASSERT((DT_REG_SIZE(DT_INST_PHANDLE(0, execution_memory)) >=         \
-				  DT_REG_SIZE(DT_INST_PHANDLE(0, image_source))),              \
-				 "Image size must not exceed execution memory size");
+	BUILD_ASSERT((DT_REG_SIZE(DT_INST_PHANDLE(0, execution_memory)) >=
+		      DT_REG_SIZE(DT_INST_PHANDLE(0, image_source))),
+		     "Image size must not exceed execution memory size");
 
-	BUILD_ASSERT(
-		((DT_REG_ADDR(DT_INST_PHANDLE(0, execution_memory)) >= DT_REG_ADDR(DT_INST_PHANDLE(0, image_source)) + DT_REG_SIZE(DT_INST_PHANDLE(0, image_source))) || \
-		(DT_REG_ADDR(DT_INST_PHANDLE(0, image_source)) >= DT_REG_ADDR(DT_INST_PHANDLE(0, execution_memory)) + DT_REG_SIZE(DT_INST_PHANDLE(0, execution_memory)))),
-		"Image source memory must not overlap with execution memory"
-	);
+	BUILD_ASSERT(((DT_REG_ADDR(DT_INST_PHANDLE(0, execution_memory)) >=
+		       DT_REG_ADDR(DT_INST_PHANDLE(0, image_source)) +
+			       DT_REG_SIZE(DT_INST_PHANDLE(0, image_source))) ||
+		      (DT_REG_ADDR(DT_INST_PHANDLE(0, image_source)) >=
+		       DT_REG_ADDR(DT_INST_PHANDLE(0, execution_memory)) +
+			       DT_REG_SIZE(DT_INST_PHANDLE(0, execution_memory)))),
+		     "Image source memory must not overlap with execution memory");
 
 	void *src_mem = (void *)DT_REG_ADDR(DT_INST_PHANDLE(0, image_source));
 	void *exec_mem = (void *)DT_REG_ADDR(DT_INST_PHANDLE(0, execution_memory));
 
 	LOG_DBG("Copying image from %p to %p", src_mem, exec_mem);
 
-	memcpy(
-		exec_mem, src_mem,
-		MIN(DT_REG_SIZE(DT_INST_PHANDLE(0, execution_memory)),
-		DT_REG_SIZE(DT_INST_PHANDLE(0, image_source)))
-	);
+	memcpy(exec_mem, src_mem,
+	       MIN(DT_REG_SIZE(DT_INST_PHANDLE(0, execution_memory)),
+		   DT_REG_SIZE(DT_INST_PHANDLE(0, image_source))));
 #endif /* DT_INST_NODE_HAS_PROP(0, image_source) */
 
 	uint32_t cpu1_image_base = DT_REG_ADDR(DT_INST_PHANDLE(0, execution_memory));
@@ -267,8 +267,8 @@ static int rpi_pico_mailbox_init(const struct device *dev)
 
 	/* Initialize mbox for communication. */
 	IRQ_CONNECT(DT_INST_IRQ_BY_NAME(0, sio_irq_fifo, irq),
-		DT_INST_IRQ_BY_NAME(0, sio_irq_fifo, priority),
-		rpi_pico_mailbox_isr, DEVICE_DT_INST_GET(0), 0);
+		    DT_INST_IRQ_BY_NAME(0, sio_irq_fifo, priority), rpi_pico_mailbox_isr,
+		    DEVICE_DT_INST_GET(0), 0);
 
 	return 0;
 }
@@ -281,9 +281,6 @@ static DEVICE_API(ipm, rpi_pico_mailbox_driver_api) = {
 	.set_enabled = rpi_pico_mailbox_set_enabled,
 };
 
-DEVICE_DT_INST_DEFINE(0,
-	&rpi_pico_mailbox_init,
-	NULL,
-	&rpi_pico_mailbox_data, &rpi_pico_mailbox_config,
-	POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-	&rpi_pico_mailbox_driver_api);
+DEVICE_DT_INST_DEFINE(0, &rpi_pico_mailbox_init, NULL, &rpi_pico_mailbox_data,
+		      &rpi_pico_mailbox_config, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      &rpi_pico_mailbox_driver_api);
