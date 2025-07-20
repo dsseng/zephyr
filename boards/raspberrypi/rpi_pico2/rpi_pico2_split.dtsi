@@ -14,7 +14,11 @@
 
 		/* CPU0 */
 		sram0_cpu0: memory@20000000 {
-			reg = <0x20000000 DT_SIZE_K(256)>;
+			reg = <0x20000000 DT_SIZE_K(128)>;
+		};
+
+		cpu1_slot0_partition: memory@20020000 {
+			reg = <0x20020000 DT_SIZE_K(128)>;
 		};
 
 		/* CPU1 */
