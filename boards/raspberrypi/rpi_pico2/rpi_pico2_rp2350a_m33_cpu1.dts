@@ -33,7 +33,7 @@
 		// execute from RAM to avoid access conflicts
 		// You can add a code-partition
 		// Then add image-source to the &cpu1_launcher on cpu0
-		// zephyr,code-partition = &cpu1_code_partition;
+		zephyr,code-partition = &bootcpu1;
 	};
 };
 

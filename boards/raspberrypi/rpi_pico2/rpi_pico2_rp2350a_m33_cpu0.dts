@@ -84,6 +84,6 @@ gpio0_lo: &gpio0 {
 &cpu1_launcher {
 	memory-region = <&sram0_cpu1>;
 	// Enable if creating a flash code partition for CPU1
-	// image-source = <&cpu1_code_partition>;
+	image-source = <&bootcpu1>;
 	execution-memory = <&sram0_cpu1>;
 };
