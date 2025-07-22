@@ -12,7 +12,7 @@
 #include <zephyr/bluetooth/iso.h>
 #include <zephyr/sys/byteorder.h>
 
-#define BIG_SDU_INTERVAL_US      (10000)
+#define BIG_SDU_INTERVAL_US      (1000000)
 #define BUF_ALLOC_TIMEOUT_US     (BIG_SDU_INTERVAL_US * 2U) /* milliseconds */
 #define BIG_TERMINATE_TIMEOUT_US (60 * USEC_PER_SEC) /* microseconds */
 
@@ -59,6 +59,7 @@ static void iso_disconnected(struct bt_iso_chan *chan, uint8_t reason)
 
 static void iso_sent(struct bt_iso_chan *chan)
 {
+	printk("ISO Channel %p data sent\n", chan);
 	k_sem_give(&sem_iso_data);
 }
 
@@ -111,7 +112,7 @@ int main(void)
 	 * Broadcast ISO radio events.
 	 * For 10ms SDU interval a extended advertising interval of 60 - 10 = 50 is suitable
 	 */
-	const uint16_t adv_interval_ms = 60U;
+	const uint16_t adv_interval_ms = 200U;
 	const uint16_t ext_adv_interval_ms = adv_interval_ms - 10U;
 	const struct bt_le_adv_param *ext_adv_param = BT_LE_ADV_PARAM(
 		BT_LE_ADV_OPT_EXT_ADV, BT_GAP_MS_TO_ADV_INTERVAL(ext_adv_interval_ms),
@@ -124,8 +125,8 @@ int main(void)
 	struct bt_iso_big *big;
 	int err;
 
-	uint32_t iso_send_count = 0;
-	uint8_t iso_data[sizeof(iso_send_count)] = { 0 };
+	uint32_t iso_send_count = 0x7b1d;
+	uint8_t iso_data[sizeof(iso_send_count)] = { 0x7b, 0x1d };
 
 	printk("Starting ISO Broadcast Demo\n");
 
