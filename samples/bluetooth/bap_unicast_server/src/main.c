@@ -5,6 +5,7 @@
  */
 
 #include <errno.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -32,6 +33,10 @@
 #include <zephyr/sys/util_macro.h>
 #include <zephyr/sys_clock.h>
 #include <zephyr/types.h>
+
+#if defined(CONFIG_LIBLC3)
+#include "lc3.h"
+#endif /* CONFIG_LIBLC3 */
 
 #define AVAILABLE_SINK_CONTEXT  (BT_AUDIO_CONTEXT_TYPE_UNSPECIFIED | \
 				 BT_AUDIO_CONTEXT_TYPE_CONVERSATIONAL | \
@@ -61,6 +66,13 @@ static struct audio_source {
 	uint16_t seq_num;
 	uint16_t max_sdu;
 	size_t len_to_send;
+#if defined(CONFIG_LIBLC3)
+	lc3_encoder_t encoder;
+	int frame_duration_us;
+	int freq;
+	int octets_per_frame;
+	lc3_encoder_mem_48k_t encoder_mem;
+#endif /* CONFIG_LIBLC3 */
 } source_streams[CONFIG_BT_ASCS_MAX_ASE_SRC_COUNT];
 static size_t configured_source_stream_count;
 
@@ -113,9 +125,6 @@ static uint16_t get_and_incr_seq_num(const struct bt_bap_stream *stream)
 }
 
 #if defined(CONFIG_LIBLC3)
-
-#include "lc3.h"
-
 #define MAX_SAMPLE_RATE         48000
 #define MAX_FRAME_DURATION_US   10000
 #define MAX_NUM_SAMPLES         ((MAX_FRAME_DURATION_US * MAX_SAMPLE_RATE) / USEC_PER_SEC)
@@ -193,6 +202,81 @@ static void print_qos(const struct bt_bap_qos_cfg *qos)
 	       qos->rtn, qos->latency, qos->pd);
 }
 
+#define LC3_MAX_SAMPLE_RATE       48000U
+#define LC3_MAX_FRAME_DURATION_US 10000U
+#define LC3_MAX_NUM_SAMPLES       ((LC3_MAX_FRAME_DURATION_US * LC3_MAX_SAMPLE_RATE) / USEC_PER_SEC)
+/* codec does clipping above INT16_MAX - 3000 */
+#define AUDIO_VOLUME              (INT16_MAX - 3000)
+#define AUDIO_TONE_FREQUENCY_HZ   400
+
+static int16_t audio_buf[LC3_MAX_NUM_SAMPLES];
+/**
+ * Use the math lib to generate a sine-wave using 16 bit samples into a buffer.
+ *
+ * @param stream The TX stream to generate and fill the sine wave for
+ */
+static void fill_audio_buf_sin(struct bt_bap_stream *stream, int freq_hz, int frame_duration_us)
+{
+	const unsigned int num_samples =
+		(frame_duration_us * freq_hz) / USEC_PER_SEC;
+	const int sine_period_samples = freq_hz / AUDIO_TONE_FREQUENCY_HZ;
+	const float step = 2 * 3.1415f / sine_period_samples;
+
+	for (unsigned int i = 0; i < num_samples; i++) {
+		const float sample = sinf(i * step);
+
+		audio_buf[i] = (int16_t)(AUDIO_VOLUME * sample);
+	}
+}
+
+static bool encode_frame(struct audio_source *stream, uint8_t index, struct net_buf *out_buf)
+{
+	/* Generate sine wave */
+	fill_audio_buf_sin(&stream->stream, stream->freq, stream->frame_duration_us);
+
+	int lc3_ret = lc3_encode(stream->encoder, LC3_PCM_FORMAT_S16, audio_buf, 1,
+			     stream->octets_per_frame, net_buf_tail(out_buf));
+	if (lc3_ret < 0) {
+		printk("LC3 encoder failed - wrong parameters?: %d", lc3_ret);
+
+		return false;
+	}
+
+	out_buf->len += stream->octets_per_frame;
+
+	return true;
+}
+
+static bool encode_frame_block(struct audio_source *stream, struct net_buf *out_buf)
+{
+	enum bt_audio_location chan_allocation;
+	int ret = bt_audio_codec_cfg_get_chan_allocation(stream->stream.codec_cfg, &chan_allocation, false);
+	if (ret != 0) {
+		printk("Could not get channel allocation: %d", ret);
+		chan_allocation = BT_AUDIO_LOCATION_MONO_AUDIO;
+	}
+
+	for (uint8_t i = 0U; i < bt_audio_get_chan_count(chan_allocation); i++) {
+		/* We provide the total number of decoded frames to `decode_frame` for logging
+		 * purposes
+		 */
+		if (!encode_frame(stream, i, out_buf)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void stream_lc3_add_data(struct audio_source *stream, struct net_buf *buf)
+{
+	for (uint8_t i = 0U; i < bt_audio_codec_cfg_get_frame_blocks_per_sdu(stream->stream.codec_cfg, true); i++) {
+		if (!encode_frame_block(stream, buf)) {
+			break;
+		}
+	}
+}
+
 /**
  * @brief Send audio data on timeout
  *
@@ -210,17 +294,16 @@ static void print_qos(const struct bt_bap_qos_cfg *qos)
 static void audio_timer_timeout(struct k_work *work)
 {
 	int ret;
-	static uint8_t buf_data[CONFIG_BT_ISO_TX_MTU];
-	static bool data_initialized;
+	static uint8_t mock_data[CONFIG_BT_ISO_TX_MTU];
+	static bool mock_data_initialized;
 	struct net_buf *buf;
 
-	if (!data_initialized) {
-		/* TODO: Actually encode some audio data */
-		for (size_t i = 0U; i < ARRAY_SIZE(buf_data); i++) {
-			buf_data[i] = (uint8_t)i;
+	if (!mock_data_initialized) {
+		for (size_t i = 0U; i < ARRAY_SIZE(mock_data); i++) {
+			mock_data[i] = (uint8_t)i;
 		}
 
-		data_initialized = true;
+		mock_data_initialized = true;
 	}
 
 	/* We configured the sink streams to be first in `streams`, so that
@@ -238,7 +321,12 @@ static void audio_timer_timeout(struct k_work *work)
 		}
 		net_buf_reserve(buf, BT_ISO_CHAN_SEND_RESERVE);
 
-		net_buf_add_mem(buf, buf_data, ++source_streams[i].len_to_send);
+		if (stream->codec_cfg->id == BT_HCI_CODING_FORMAT_LC3) {
+			stream_lc3_add_data(&source_streams[i], buf);
+		} else {
+			printk("Unexpected codec ID %d, expected LC3\n", stream->codec_cfg->id);
+			net_buf_add_mem(buf, mock_data, ++source_streams[i].len_to_send);
+		}
 
 		ret = bt_bap_stream_send(stream, buf, get_and_incr_seq_num(stream));
 		if (ret < 0) {
@@ -380,11 +468,18 @@ static int lc3_enable(struct bt_bap_stream *stream, const uint8_t meta[], size_t
 	{
 		int frame_duration_us;
 		int freq;
+		int octets_per_frame;
 		int ret;
 
 		ret = bt_audio_codec_cfg_get_freq(stream->codec_cfg);
 		if (ret > 0) {
 			freq = bt_audio_codec_cfg_freq_to_freq_hz(ret);
+			if (!LC3_CHECK_SR_HZ(freq)) {
+				printk("Unsupported sampling frequency for LC3: %d", freq);
+				*rsp = BT_BAP_ASCS_RSP(BT_BAP_ASCS_RSP_CODE_CONF_INVALID,
+						       BT_BAP_ASCS_REASON_CODEC_DATA);
+				return -EINVAL;
+			}
 		} else {
 			printk("Error: Codec frequency not set, cannot start codec.");
 			*rsp = BT_BAP_ASCS_RSP(BT_BAP_ASCS_RSP_CODE_CONF_INVALID,
@@ -395,8 +490,24 @@ static int lc3_enable(struct bt_bap_stream *stream, const uint8_t meta[], size_t
 		ret = bt_audio_codec_cfg_get_frame_dur(stream->codec_cfg);
 		if (ret > 0) {
 			frame_duration_us = bt_audio_codec_cfg_frame_dur_to_frame_dur_us(ret);
+			if (!LC3_CHECK_DT_US(frame_duration_us)) {
+				printk("Unsupported frame duration for LC3: %d", frame_duration_us);
+				*rsp = BT_BAP_ASCS_RSP(BT_BAP_ASCS_RSP_CODE_CONF_INVALID,
+						       BT_BAP_ASCS_REASON_CODEC_DATA);
+				return -EINVAL;
+			}
 		} else {
 			printk("Error: Frame duration not set, cannot start codec.");
+			*rsp = BT_BAP_ASCS_RSP(BT_BAP_ASCS_RSP_CODE_CONF_INVALID,
+					       BT_BAP_ASCS_REASON_CODEC_DATA);
+			return ret;
+		}
+
+		ret = bt_audio_codec_cfg_get_octets_per_frame(stream->codec_cfg);
+		if (ret >= 0) {
+			octets_per_frame = ret;
+		} else {
+			printk("Error: Octets per frame not set, cannot start codec.");
 			*rsp = BT_BAP_ASCS_RSP(BT_BAP_ASCS_RSP_CODE_CONF_INVALID,
 					       BT_BAP_ASCS_REASON_CODEC_DATA);
 			return ret;
@@ -405,16 +516,40 @@ static int lc3_enable(struct bt_bap_stream *stream, const uint8_t meta[], size_t
 		frames_per_sdu =
 			bt_audio_codec_cfg_get_frame_blocks_per_sdu(stream->codec_cfg, true);
 
-		lc3_decoder = lc3_setup_decoder(frame_duration_us,
-						freq,
-						0, /* No resampling */
-						&lc3_decoder_mem);
+		for (size_t i = 0U; i < configured_source_stream_count; i++) {
+			if (stream == &source_streams[i].stream) {
+				source_streams[i].frame_duration_us = frame_duration_us;
+				source_streams[i].freq = freq;
+				source_streams[i].octets_per_frame = octets_per_frame;
 
-		if (lc3_decoder == NULL) {
-			printk("ERROR: Failed to setup LC3 encoder - wrong parameters?\n");
-			*rsp = BT_BAP_ASCS_RSP(BT_BAP_ASCS_RSP_CODE_CONF_INVALID,
-					       BT_BAP_ASCS_REASON_CODEC_DATA);
-			return -1;
+				break;
+			}
+		}
+
+		if (stream_dir(stream) == BT_AUDIO_DIR_SINK) {
+			lc3_decoder = lc3_setup_decoder(frame_duration_us,
+							freq,
+							0, /* No resampling */
+							&lc3_decoder_mem);
+
+			if (lc3_decoder == NULL) {
+				printk("ERROR: Failed to setup LC3 encoder - wrong parameters?\n");
+				*rsp = BT_BAP_ASCS_RSP(BT_BAP_ASCS_RSP_CODE_CONF_INVALID,
+							BT_BAP_ASCS_REASON_CODEC_DATA);
+				return -1;
+			}
+		} else {
+			for (size_t i = 0U; i < configured_source_stream_count; i++) {
+				if (stream == &source_streams[i].stream) {
+					source_streams[i].encoder = lc3_setup_encoder(frame_duration_us, freq, 0,
+							&source_streams[i].encoder_mem);
+					if (!source_streams[i].encoder) {
+						printk("Failed to create LC3 encoder\n");
+						return -ENOMEM;
+					}
+					break;
+				}
+			}
 		}
 	}
 #endif
