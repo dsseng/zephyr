@@ -3309,12 +3309,14 @@ static int bt_do_connect_le(int *ercd, size_t argc, char *argv[])
 		} else {
 			return -ENOENT;
 		}
-	} else {
+	} else if (argc == 3) {
 		err = bt_addr_le_from_str(argv[1], argv[2], &addr);
 		if (err) {
 			*ercd = err;
 			return -EINVAL;
 		}
+	} else {
+		return -EINVAL;
 	}
 
 #if defined(CONFIG_BT_EXT_ADV)
