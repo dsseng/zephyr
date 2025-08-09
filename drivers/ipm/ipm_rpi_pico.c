@@ -32,10 +32,6 @@ static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id
 		return -EMSGSIZE;
 	}
 
-	if (id > UINT32_MAX) {
-		return -EINVAL;
-	}
-
 	if (!(sio_hw->fifo_st & SIO_FIFO_ST_RDY_BITS) && !wait) {
 		LOG_ERR("Mailbox FIFO is full, cannot send message");
 
@@ -43,6 +39,7 @@ static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id
 	}
 
 	while (!(sio_hw->fifo_st & SIO_FIFO_ST_RDY_BITS)) {
+		k_busy_wait(1);
 	}
 
 	sio_hw->fifo_wr = id;
@@ -57,9 +54,12 @@ static void rpi_pico_mailbox_register_callback(const struct device *dev, ipm_cal
 					       void *user_data)
 {
 	struct rpi_pico_ipm_data *data = dev->data;
+	uint32_t key;
 
-	data->cb = cb;
+	key = irq_lock();
 	data->user_data = user_data;
+	data->cb = cb;
+	irq_unlock(key);
 }
 
 static int rpi_pico_mailbox_max_data_size_get(const struct device *dev)
