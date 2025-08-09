@@ -12,22 +12,15 @@
 #include <zephyr/drivers/ipm.h>
 
 #include <zephyr/logging/log.h>
-#include "hardware/structs/sio.h"
+#include <hardware/structs/sio.h>
 
 LOG_MODULE_REGISTER(ipm_rpi_pico, CONFIG_IPM_LOG_LEVEL);
-
-struct rpi_pico_mailbox_config {
-	sio_hw_t *const sio_regs;
-};
 
 struct rpi_pico_ipm_data {
 	ipm_callback_t cb;
 	void *user_data;
 };
 
-static struct rpi_pico_mailbox_config rpi_pico_sio_mailbox_config = {
-	.sio_regs = (sio_hw_t *)DT_INST_REG_ADDR_BY_NAME(0, sio),
-};
 static struct rpi_pico_ipm_data rpi_pico_mailbox_data;
 
 static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id,
@@ -43,19 +36,16 @@ static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id
 		return -EINVAL;
 	}
 
-	const struct rpi_pico_mailbox_config *config =
-		(const struct rpi_pico_mailbox_config *)dev->config;
-
-	if (!(config->sio_regs->fifo_st & SIO_FIFO_ST_RDY_BITS) && !wait) {
+	if (!(sio_hw->fifo_st & SIO_FIFO_ST_RDY_BITS) && !wait) {
 		LOG_ERR("Mailbox FIFO is full, cannot send message");
 
 		return -EBUSY;
 	}
 
-	while (!(config->sio_regs->fifo_st & SIO_FIFO_ST_RDY_BITS)) {
+	while (!(sio_hw->fifo_st & SIO_FIFO_ST_RDY_BITS)) {
 	}
 
-	config->sio_regs->fifo_wr = id;
+	sio_hw->fifo_wr = id;
 
 	/* Inform other CPU about FIFO update. */
 	__SEV();
@@ -107,14 +97,11 @@ static int rpi_pico_mailbox_set_enabled(const struct device *dev, int enable)
 
 static void rpi_pico_mailbox_isr(const struct device *dev)
 {
-	const struct rpi_pico_mailbox_config *config =
-		(const struct rpi_pico_mailbox_config *)dev->config;
-
 	/* Clear status */
-	config->sio_regs->fifo_st = 0xff;
+	sio_hw->fifo_st = 0xff;
 
-	while (config->sio_regs->fifo_st & SIO_FIFO_ST_VLD_BITS) {
-		uint32_t msg = config->sio_regs->fifo_rd;
+	while (sio_hw->fifo_st & SIO_FIFO_ST_VLD_BITS) {
+		uint32_t msg = sio_hw->fifo_rd;
 		struct rpi_pico_ipm_data *data = dev->data;
 
 		if (data->cb) {
@@ -141,6 +128,9 @@ static DEVICE_API(ipm, rpi_pico_mailbox_driver_api) = {
 	.set_enabled = rpi_pico_mailbox_set_enabled,
 };
 
+BUILD_ASSERT((DT_INST_REG_ADDR_BY_NAME(0, sio) == SIO_BASE + SIO_FIFO_ST_OFFSET),
+	     "Unsupported SIO FIFO base address");
+
 DEVICE_DT_INST_DEFINE(0, &rpi_pico_mailbox_init, NULL, &rpi_pico_mailbox_data,
-		      &rpi_pico_sio_mailbox_config, POST_KERNEL,
-			  CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &rpi_pico_mailbox_driver_api);
+			 NULL, POST_KERNEL,
+			 CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &rpi_pico_mailbox_driver_api);
