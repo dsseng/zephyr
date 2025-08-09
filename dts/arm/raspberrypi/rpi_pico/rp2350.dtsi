@@ -463,9 +463,9 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			ipm0: sio-fifo@d0000000 {
+			ipm0: sio-fifo@d0000050 {
 				compatible = "raspberrypi,pico-sio-fifo";
-				reg = <0xd0000000 DT_SIZE_K(4)>;
+				reg = <0xd0000050 0xc>;
 				reg-names = "sio";
 				interrupts = <25 RPI_PICO_DEFAULT_IRQ_PRIORITY>,
 							<26 RPI_PICO_DEFAULT_IRQ_PRIORITY>,
