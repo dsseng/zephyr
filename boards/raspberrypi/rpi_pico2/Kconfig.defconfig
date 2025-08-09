@@ -7,3 +7,9 @@ config USB_SELF_POWERED
 	default n
 
 endif # BOARD_RPI_PICO2
+
+if BOARD_RPI_PICO2_RP2350A_M33_CPU1
+
+source "boards/common/usb/Kconfig.cdc_acm_serial.defconfig"
+
+endif # BOARD_RPI_PICO2_RP2350A_M33_CPU1
