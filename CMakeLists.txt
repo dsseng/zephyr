@@ -1886,6 +1886,19 @@ if(CONFIG_BUILD_OUTPUT_BIN AND CONFIG_BUILD_OUTPUT_UF2)
     )
   endif()
 
+  # No-XIP images (such as ones for RP2350 with CONFIG_XIP=n)
+  # are typically loaded to RAM
+  if(NOT CONFIG_XIP)
+    if(CONFIG_BUILD_OUTPUT_ADJUST_LMA)
+      math(EXPR flash_addr
+          "${CONFIG_SRAM_BASE_ADDRESS} + ${CONFIG_BUILD_OUTPUT_ADJUST_LMA} + 0"
+          OUTPUT_FORMAT HEXADECIMAL
+      )
+    else()
+      set(flash_addr "${CONFIG_SRAM_BASE_ADDRESS}")
+    endif()
+  endif()
+
   list(APPEND
     post_build_commands
     COMMAND ${PYTHON_EXECUTABLE} ${ZEPHYR_BASE}/scripts/build/uf2conv.py
