@@ -6,7 +6,7 @@ description: |
 
 compatible: "worldsemi,ws2812-rpi_pico-pio"
 
-include: pinctrl-device.yaml
+include: [base.yaml, pinctrl-device.yaml]
 
 properties:
   bit-waveform:
