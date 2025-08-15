@@ -18,6 +18,7 @@ LOG_MODULE_REGISTER(main);
 #include <zephyr/device.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/pm/device_runtime.h>
 
 #define STRIP_NODE		DT_ALIAS(led_strip)
 
@@ -55,6 +56,9 @@ int main(void)
 
 	LOG_INF("Displaying pattern on strip");
 	while (1) {
+		LOG_INF("pm_device_runtime_get %d", pm_device_runtime_get(DEVICE_DT_GET(STRIP_NODE)));
+		LOG_INF("pm_device_runtime_usage %d", pm_device_runtime_usage(DEVICE_DT_GET(STRIP_NODE)));
+		LOG_INF("pm_device_runtime_usage %d", pm_device_runtime_usage(DEVICE_DT_GET(DT_PARENT(STRIP_NODE))));
 		for (size_t cursor = 0; cursor < ARRAY_SIZE(pixels); cursor++) {
 			memset(&pixels, 0x00, sizeof(pixels));
 			memcpy(&pixels[cursor], &colors[color], sizeof(struct led_rgb));
@@ -68,6 +72,11 @@ int main(void)
 		}
 
 		color = (color + 1) % ARRAY_SIZE(colors);
+		k_msleep(500);
+		LOG_INF("pm_device_runtime_put %d", pm_device_runtime_put_async(DEVICE_DT_GET(STRIP_NODE), K_MSEC(1)));
+		LOG_INF("pm_device_runtime_usage %d", pm_device_runtime_usage(DEVICE_DT_GET(STRIP_NODE)));
+		LOG_INF("pm_device_runtime_usage %d", pm_device_runtime_usage(DEVICE_DT_GET(DT_PARENT(STRIP_NODE))));
+		k_msleep(500);
 	}
 
 	return 0;
