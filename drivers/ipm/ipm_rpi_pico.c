@@ -26,16 +26,11 @@ static struct rpi_pico_ipm_data rpi_pico_mailbox_data;
 static int rpi_pico_mailbox_send(const struct device *dev, int wait, uint32_t id,
 	const void *data, int size)
 {
+	ARG_UNUSED(wait);
 	ARG_UNUSED(data);
 
 	if (size != 0) {
 		return -EMSGSIZE;
-	}
-
-	if (!(sio_hw->fifo_st & SIO_FIFO_ST_RDY_BITS) && !wait) {
-		LOG_ERR("Mailbox FIFO is full, cannot send message");
-
-		return -EBUSY;
 	}
 
 	while (!(sio_hw->fifo_st & SIO_FIFO_ST_RDY_BITS)) {
