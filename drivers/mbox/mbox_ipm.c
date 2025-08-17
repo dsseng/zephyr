@@ -34,12 +34,7 @@ static struct mbox_ipm_conf {
 	.ipm_dev = DEVICE_DT_GET(DT_PARENT(DT_INST(0, zephyr_ipm_mbox))),
 };
 
-static inline bool is_rx_channel_valid(const struct device *dev, uint32_t ch)
-{
-	return ch < MBOX_IPM_CHANNELS;
-}
-
-static inline bool is_tx_channel_valid(const struct device *dev, uint32_t ch)
+static inline bool is_channel_valid(const struct device *dev, uint32_t ch)
 {
 	return ch < MBOX_IPM_CHANNELS;
 }
@@ -50,7 +45,7 @@ static void mbox_dispatcher(const struct device *ipmdev, void *user_data, uint32
 	struct mbox_ipm_data *data = (struct mbox_ipm_data *)user_data;
 	const struct device *dev = data->dev;
 
-	if (!is_rx_channel_valid(dev, id)) {
+	if (!is_channel_valid(dev, id)) {
 		LOG_WRN("RX event on illegal channel %u", id);
 	}
 
@@ -69,7 +64,7 @@ static int mbox_ipm_send(const struct device *dev, uint32_t channel, const struc
 		LOG_WRN("Sending data not supported");
 	}
 
-	if (!is_tx_channel_valid(dev, channel)) {
+	if (!is_channel_valid(dev, channel)) {
 		return -EINVAL;
 	}
 
