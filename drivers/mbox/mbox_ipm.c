@@ -75,7 +75,7 @@ static int mbox_ipm_send(const struct device *dev, uint32_t channel, const struc
 
 	const struct mbox_ipm_conf *conf = dev->config;
 
-	ipm_send(conf->ipm_dev, true, channel, NULL, 0);
+	ipm_send(conf->ipm_dev, 0, channel, NULL, 0);
 
 	return 0;
 }
@@ -84,13 +84,16 @@ static int mbox_ipm_register_callback(const struct device *dev, uint32_t channel
 				      mbox_callback_t cb, void *user_data)
 {
 	struct mbox_ipm_data *data = dev->data;
+	uint32_t key;
 
 	if (channel >= MBOX_IPM_CHANNELS) {
 		return -EINVAL;
 	}
 
+	key = irq_lock();
 	data->cb[channel] = cb;
 	data->user_data[channel] = user_data;
+	irq_unlock(key);
 
 	return 0;
 }
