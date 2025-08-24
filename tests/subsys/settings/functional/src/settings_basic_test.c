@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <zephyr/settings/settings.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/reboot.h>
 LOG_MODULE_REGISTER(settings_basic_test);
 
 #if defined(CONFIG_SETTINGS_FCB) || defined(CONFIG_SETTINGS_NVS) || defined(CONFIG_SETTINGS_ZMS)
@@ -38,11 +39,18 @@ LOG_MODULE_REGISTER(settings_basic_test);
 #define TEST_FLASH_AREA_ID	FIXED_PARTITION_ID(TEST_FLASH_AREA)
 #endif
 
+static uint32_t boot_n __noinit;
+
 /* The standard test expects a cleared flash area.  Make sure it has
  * one.
  */
 ZTEST(settings_functional, test_clear_settings)
 {
+	/* Do not wipe storage during persistence tests */
+	if (boot_n > 0) {
+		ztest_test_skip();
+	}
+
 #if defined(CONFIG_SETTINGS_TFM_ITS)
 	psa_status_t status;
 
@@ -670,4 +678,64 @@ ZTEST(settings_functional, test_direct_loading_filter)
 			n, data_final[n].n);
 	}
 	settings_deregister(&filtered_loader_settings);
+}
+
+#define TEST_VALUE 0xfeedda7a
+ZTEST(settings_functional, test_persistence)
+{
+	// TODO: Z_TEST_SKIP_IFNDEF(CONFIG_TEST_SETTINGS_PERSISTENCE);
+
+	uint32_t value = 0;
+	int rc;
+
+	switch (boot_n) {
+	case 0:
+		value = TEST_VALUE;
+		rc = settings_save_one("test/persist", (const void *)&value,
+				       sizeof(value));
+		zassert_equal(0, rc, "Failed to save test setting");
+		value = 0xdeadbeef;
+
+		k_msleep(1000);
+
+		rc = settings_load_one("test/persist", &value, sizeof(value));
+
+		zassert_equal(4, rc, "Failed to read persistence test setting");
+		zassert_equal(TEST_VALUE, value, "Wrong setting value after saving");
+
+		boot_n += 1;
+		sys_reboot(SYS_REBOOT_WARM);
+		zassert_unreachable("reboot failed");
+	case 1:
+		rc = settings_load_one("test/persist", &value, sizeof(value));
+
+		zassert_equal(4, rc, "Failed to read persistence test setting");
+		zassert_equal(TEST_VALUE, value, "Wrong setting value after reboot");
+
+		value = ~TEST_VALUE;
+		rc = settings_save_one("test/persist", (const void *)&value,
+				       sizeof(value));
+		zassert_equal(0, rc, "Failed to update test setting");
+		value = 0xdeadbeef;
+
+		k_msleep(1000);
+
+		rc = settings_load_one("test/persist", &value, sizeof(value));
+
+		zassert_equal(4, rc, "Failed to read persistence test setting");
+		zassert_equal(~TEST_VALUE, value, "Wrong setting value after saving");
+
+		boot_n += 1;
+		sys_reboot(SYS_REBOOT_WARM);
+		zassert_unreachable("reboot failed");
+		break;
+	case 2:
+		rc = settings_load_one("test/persist", &value, sizeof(value));
+
+		zassert_equal(4, rc, "Failed to read persistence test setting");
+		zassert_equal(~TEST_VALUE, value, "Wrong setting value after reboot");
+		break;
+	default:
+		zassert_unreachable();
+	}
 }
