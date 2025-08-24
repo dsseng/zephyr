@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 tests:
-  settings.tfm_its:
+  settings.tfm_psa_its:
     filter: CONFIG_TFM_PARTITION_INTERNAL_TRUSTED_STORAGE
     min_ram: 32
     integration_platforms:

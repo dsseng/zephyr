@@ -14,4 +14,4 @@ struct setting_entry {
 	size_t val_len;
 };
 
-static struct setting_entry entries[CONFIG_SETTINGS_TFM_ITS_NUM_ENTRIES];
+static struct setting_entry entries[CONFIG_SETTINGS_PSA_NUM_ENTRIES];

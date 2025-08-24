@@ -8,5 +8,5 @@ tests:
       - settings
       - trusted-firmware-m
     extra_args:
-      - CONFIG_SETTINGS_TFM_ITS=y
+      - CONFIG_SETTINGS_PSA=y
       - CONFIG_TFM_ITS_MAX_ASSET_SIZE_OVERRIDE=y

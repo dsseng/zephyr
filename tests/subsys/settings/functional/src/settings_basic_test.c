@@ -25,11 +25,11 @@ LOG_MODULE_REGISTER(settings_basic_test);
 #elif defined(CONFIG_SETTINGS_FILE)
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/littlefs.h>
-#elif defined(CONFIG_SETTINGS_TFM_ITS)
+#elif defined(CONFIG_SETTINGS_PSA)
 #include <psa/internal_trusted_storage.h>
 #include <zephyr/psa/its_ids.h>
 
-#include "settings_its_priv.h"
+#include "settings_psa_priv.h"
 #else
 #error "Settings backend not selected"
 #endif
@@ -51,12 +51,12 @@ ZTEST(settings_functional, test_clear_settings)
 		ztest_test_skip();
 	}
 
-#if defined(CONFIG_SETTINGS_TFM_ITS)
+#if defined(CONFIG_SETTINGS_PSA)
 	psa_status_t status;
 
 	/* Remove all potentially accessed ITS entries in the UID range */
 	for (int i = 0; i < (sizeof(entries) / CONFIG_TFM_ITS_MAX_ASSET_SIZE) + 1; i++) {
-		status = psa_its_remove(ZEPHYR_PSA_SETTINGS_TFM_ITS_UID_RANGE_BEGIN + i);
+		status = psa_its_remove(ZEPHYR_PSA_SETTINGS_PSA_UID_RANGE_BEGIN + i);
 		zassert_true((status == PSA_SUCCESS) || (status == PSA_ERROR_DOES_NOT_EXIST),
 			"psa_its_remove failed");
 	}
