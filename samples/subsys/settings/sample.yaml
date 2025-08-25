@@ -50,6 +50,18 @@ tests:
     integration_platforms:
       - native_sim
 
+  sample.subsys.settings.tfm-ps:
+    tags:
+      - trusted-firmware-m
+    platform_allow:
+      - mps2/an521/cpu0/ns
+    integration_platforms:
+      - mps2/an521/cpu0/ns
+    extra_args:
+      - CONFIG_SETTINGS_PSA=y
+      - CONFIG_SETTINGS_PSA_BACKEND_PS=y
+      - CONFIG_TFM_ITS_MAX_ASSET_SIZE_OVERRIDE=y
+
   sample.subsys.settings.tfm-its:
     tags:
       - trusted-firmware-m
@@ -59,4 +71,5 @@ tests:
       - mps2/an521/cpu0/ns
     extra_args:
       - CONFIG_SETTINGS_PSA=y
+      - CONFIG_SETTINGS_PSA_BACKEND_ITS=y
       - CONFIG_TFM_ITS_MAX_ASSET_SIZE_OVERRIDE=y

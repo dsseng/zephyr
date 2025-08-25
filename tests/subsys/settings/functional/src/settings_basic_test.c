@@ -25,9 +25,11 @@ LOG_MODULE_REGISTER(settings_basic_test);
 #elif defined(CONFIG_SETTINGS_FILE)
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/littlefs.h>
-#elif defined(CONFIG_SETTINGS_PSA)
+#elif defined(CONFIG_SETTINGS_PSA_BACKEND_PS) || defined(CONFIG_SETTINGS_PSA_BACKEND_ITS)
+#include <psa/protected_storage.h>
 #include <psa/internal_trusted_storage.h>
 #include <zephyr/psa/its_ids.h>
+#include <config_tfm.h>
 
 #include "settings_psa_priv.h"
 #else
@@ -51,7 +53,16 @@ ZTEST(settings_functional, test_clear_settings)
 		ztest_test_skip();
 	}
 
-#if defined(CONFIG_SETTINGS_PSA)
+#if defined(CONFIG_SETTINGS_PSA_BACKEND_PS)
+	psa_status_t status;
+
+	/* Remove all potentially accessed ITS entries in the UID range */
+	for (int i = 0; i < (sizeof(entries) / PS_MAX_ASSET_SIZE) + 1; i++) {
+		status = psa_ps_remove(ZEPHYR_PSA_SETTINGS_PSA_UID_RANGE_BEGIN + i);
+		zassert_true((status == PSA_SUCCESS) || (status == PSA_ERROR_DOES_NOT_EXIST),
+			"psa_its_remove failed");
+	}
+#elif defined(CONFIG_SETTINGS_PSA_BACKEND_ITS)
 	psa_status_t status;
 
 	/* Remove all potentially accessed ITS entries in the UID range */
