@@ -251,6 +251,26 @@ config SETTINGS_SHELL
 
 if SETTINGS_PSA
 
+choice SETTINGS_PSA_BACKEND
+	prompt "PSA settings storage back-end"
+	default SETTINGS_PSA_BACKEND_PS
+	help
+	  PSA storage option to be used by the PSA settings backend.
+
+config SETTINGS_PSA_BACKEND_PS
+	bool "PSA Protected Storage (PS)"
+	depends on BUILD_WITH_TFM
+	help
+	  Use PSA Protected Storage as settings storage back-end.
+
+config SETTINGS_PSA_BACKEND_ITS
+	bool "PSA Internal Trusted Storage (ITS)"
+	depends on TFM_ITS_MAX_ASSET_SIZE != 0
+	help
+	  Use PSA Internal Trusted Storage as settings storage back-end.
+
+endchoice
+
 config SETTINGS_PSA_NUM_ENTRIES
 	int "Maximum number of settings entries"
 	default 10

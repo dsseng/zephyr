@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <psa/internal_trusted_storage.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/psa/its_ids.h>
@@ -31,17 +30,33 @@ static const struct settings_store_itf settings_psa_itf = {
 
 static struct settings_store default_settings_psa = {.cs_itf = &settings_psa_itf};
 
+#if defined(CONFIG_SETTINGS_PSA_BACKEND_PS)
+#include <psa/protected_storage.h>
+#include <config_tfm.h>
+
+#define SETTINGS_PSA_CHUNK_SIZE PS_MAX_ASSET_SIZE
+#define SETTINGS_PSA_SET psa_ps_set
+#define SETTINGS_PSA_GET psa_ps_get
+#elif defined(CONFIG_SETTINGS_PSA_BACKEND_ITS)
+#include <psa/internal_trusted_storage.h>
+
+#define SETTINGS_PSA_CHUNK_SIZE CONFIG_TFM_ITS_MAX_ASSET_SIZE
+#define SETTINGS_PSA_SET psa_its_set
+#define SETTINGS_PSA_GET psa_its_get
+#else
+#error "No PSA backend selected"
+#endif
+
 /* Ensure Key configured max size does not exceed reserved Key range */
-BUILD_ASSERT(sizeof(entries) / CONFIG_TFM_ITS_MAX_ASSET_SIZE <=
+BUILD_ASSERT(sizeof(entries) / SETTINGS_PSA_CHUNK_SIZE <=
 	     ZEPHYR_PSA_SETTINGS_PSA_UID_RANGE_SIZE,
-	     "entries array exceeds reserved ITS UID range");
+	     "entries array exceeds reserved PSA storage UID range");
 
 static int store_entries(void)
 {
 	psa_status_t status;
 	psa_storage_uid_t uid = ZEPHYR_PSA_SETTINGS_PSA_UID_RANGE_BEGIN;
 	size_t remaining = sizeof(entries);
-	size_t chunk_size = CONFIG_TFM_ITS_MAX_ASSET_SIZE;
 	const uint8_t *data_ptr = (const uint8_t *)&entries;
 
 	/*
@@ -50,9 +65,9 @@ static int store_entries(void)
 	 * number of allocated UIDs and to allocate bytes in the most efficient way.
 	 */
 	while (remaining > 0) {
-		size_t write_size = (remaining > chunk_size) ? chunk_size : remaining;
+		size_t write_size = (remaining > SETTINGS_PSA_CHUNK_SIZE) ? SETTINGS_PSA_CHUNK_SIZE : remaining;
 
-		status = psa_its_set(uid, write_size, data_ptr, PSA_STORAGE_FLAG_NONE);
+		status = SETTINGS_PSA_SET(uid, write_size, data_ptr, PSA_STORAGE_FLAG_NONE);
 		if (status) {
 			LOG_ERR("Error storing %d bytes of metadata! Bytes Remaining: %d, status: "
 				"%d",
@@ -77,7 +92,6 @@ static int load_entries(void)
 	size_t bytes_read;
 	psa_storage_uid_t uid = ZEPHYR_PSA_SETTINGS_PSA_UID_RANGE_BEGIN;
 	size_t remaining = sizeof(entries);
-	size_t chunk_size = CONFIG_TFM_ITS_MAX_ASSET_SIZE;
 	uint8_t *data_ptr = (uint8_t *)&entries;
 
 	/*
@@ -86,9 +100,9 @@ static int load_entries(void)
 	 * number of allocated UIDs and to allocate bytes in the most efficient way.
 	 */
 	while (remaining > 0) {
-		size_t to_read = (remaining > chunk_size) ? chunk_size : remaining;
+		size_t to_read = (remaining > SETTINGS_PSA_CHUNK_SIZE) ? SETTINGS_PSA_CHUNK_SIZE : remaining;
 
-		status = psa_its_get(uid, 0, to_read, data_ptr, &bytes_read);
+		status = SETTINGS_PSA_GET(uid, 0, to_read, data_ptr, &bytes_read);
 		if (status) {
 			return status;
 		}
