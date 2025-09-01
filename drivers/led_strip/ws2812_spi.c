@@ -23,6 +23,8 @@ LOG_MODULE_REGISTER(ws2812_spi);
 #include <zephyr/sys/math_extras.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/dt-bindings/led/led.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/device_runtime.h>
 
 /*
  * The N-bit symbols for a '1' and '0' bit (spi-one-frame, spi-zero-frame)
@@ -181,6 +183,23 @@ static size_t ws2812_strip_length(const struct device *dev)
 	return cfg->length;
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int ws2812_spi_pm_action(const struct device *dev,
+				   enum pm_device_action action)
+{
+	const struct ws2812_spi_cfg *cfg = dev_cfg(dev);
+
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		return pm_device_runtime_get(cfg->bus.bus);
+	case PM_DEVICE_ACTION_SUSPEND:
+		return pm_device_runtime_put(cfg->bus.bus);
+	default:
+		return -ENOTSUP;
+	}
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static int ws2812_spi_init(const struct device *dev)
 {
 	const struct ws2812_spi_cfg *cfg = dev_cfg(dev);
@@ -205,6 +224,18 @@ static int ws2812_spi_init(const struct device *dev)
 			return -EINVAL;
 		}
 	}
+
+#ifdef CONFIG_PM_DEVICE_RUNTIME
+	int ret;
+
+	pm_device_init_suspended(dev);
+
+	ret = pm_device_runtime_enable(dev);
+	if (ret) {
+		LOG_ERR("Runtime PM init failed");
+		return ret;
+	}
+#endif
 
 	return 0;
 }
@@ -251,6 +282,7 @@ static DEVICE_API(led_strip, ws2812_spi_api) = {
 										\
 	WS2812_COLOR_MAPPING(idx);						\
 										\
+	PM_DEVICE_DT_INST_DEFINE(idx, ws2812_spi_pm_action);		\
 	static const struct ws2812_spi_cfg ws2812_spi_##idx##_cfg = {		\
 		.bus = SPI_DT_SPEC_INST_GET(idx, SPI_OPER(idx), 0),		\
 		.px_buf = ws2812_spi_##idx##_px_buf,				\
@@ -265,7 +297,7 @@ static DEVICE_API(led_strip, ws2812_spi_api) = {
 										\
 	DEVICE_DT_INST_DEFINE(idx,						\
 			      ws2812_spi_init,					\
-			      NULL,						\
+			      PM_DEVICE_DT_INST_GET(idx),			\
 			      NULL,						\
 			      &ws2812_spi_##idx##_cfg,				\
 			      POST_KERNEL,					\
