@@ -10,6 +10,8 @@
 #include <zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h>
 #include <zephyr/dt-bindings/led/led.h>
 #include <zephyr/kernel.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/device_runtime.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(ws2812_rpi_pico_pio, CONFIG_LED_STRIP_LOG_LEVEL);
@@ -22,6 +24,7 @@ struct ws2812_led_strip_data {
 
 struct ws2812_led_strip_config {
 	const struct device *piodev;
+	const struct device *parent;
 	const uint8_t gpio_pin;
 	uint8_t num_colors;
 	size_t length;
@@ -121,6 +124,24 @@ static DEVICE_API(led_strip, ws2812_led_strip_api) = {
 	.length = ws2812_led_strip_length,
 };
 
+#ifdef CONFIG_PM_DEVICE
+static int ws2812_led_strip_action(const struct device *dev,
+				   enum pm_device_action action)
+{
+	const struct ws2812_led_strip_config *config = dev->config;
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		pm_device_runtime_get(config->parent);
+		return 0;
+	case PM_DEVICE_ACTION_SUSPEND:
+		pm_device_runtime_put(config->parent);
+		return 0;
+	default:
+		return -ENOTSUP;
+	}
+}
+#endif /* CONFIG_PM_DEVICE */
+
 /*
  * Retrieve the channel to color mapping (e.g. RGB, BGR, GRB, ...) from the
  * "color-mapping" DT property.
@@ -158,8 +179,32 @@ static int ws2812_led_strip_init(const struct device *dev)
 
 	data->sm = sm;
 
+#ifdef CONFIG_PM_DEVICE_RUNTIME
+	int ret;
+
+	pm_device_init_suspended(dev);
+
+	ret = pm_device_runtime_enable(dev);
+	if (ret) {
+		return ret;
+	}
+#endif
 	return 0;
 }
+
+#ifdef CONFIG_PM_DEVICE
+static int ws2812_rpi_pico_pio_pm_action(const struct device *dev,
+				   enum pm_device_action action)
+{
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+	case PM_DEVICE_ACTION_SUSPEND:
+		return 0;
+	default:
+		return -ENOTSUP;
+	}
+}
+#endif /* CONFIG_PM_DEVICE */
 
 static int ws2812_rpi_pico_pio_init(const struct device *dev)
 {
@@ -175,6 +220,17 @@ static int ws2812_rpi_pico_pio_init(const struct device *dev)
 
 	pio_add_program(pio, &config->program);
 
+#ifdef CONFIG_PM_DEVICE_RUNTIME
+	int ret;
+
+	pm_device_init_suspended(dev);
+
+	ret = pm_device_runtime_enable(dev);
+	if (ret) {
+		return ret;
+	}
+#endif
+
 	return pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 }
 
@@ -187,8 +243,10 @@ static int ws2812_rpi_pico_pio_init(const struct device *dev)
 		DT_PROP(node, color_mapping);                                                      \
 	struct ws2812_led_strip_data ws2812_led_strip_##node##_data;                               \
                                                                                                    \
+        PM_DEVICE_DT_INST_DEFINE(inst, ws2812_led_strip_action);                                   \
 	static const struct ws2812_led_strip_config ws2812_led_strip_##node##_config = {           \
 		.piodev = DEVICE_DT_GET(DT_PARENT(DT_PARENT(node))),                               \
+		.parent = DEVICE_DT_GET(DT_PARENT(node)),                                          \
 		.gpio_pin = DT_GPIO_PIN_BY_IDX(node, gpios, 0),                                    \
 		.num_colors = DT_PROP_LEN(node, color_mapping),                                    \
 		.length = DT_PROP(node, chain_length),                                             \
@@ -198,7 +256,8 @@ static int ws2812_rpi_pico_pio_init(const struct device *dev)
 		.cycles_per_bit = CYCLES_PER_BIT(DT_PARENT(node)),                                 \
 	};                                                                                         \
                                                                                                    \
-	DEVICE_DT_DEFINE(node, &ws2812_led_strip_init, NULL, &ws2812_led_strip_##node##_data,      \
+	DEVICE_DT_DEFINE(node, &ws2812_led_strip_init, PM_DEVICE_DT_INST_GET(inst),                \
+			 &ws2812_led_strip_##node##_data,                                          \
 			 &ws2812_led_strip_##node##_config, POST_KERNEL,                           \
 			 CONFIG_LED_STRIP_INIT_PRIORITY, &ws2812_led_strip_api);
 
@@ -234,6 +293,7 @@ static int ws2812_rpi_pico_pio_init(const struct device *dev)
 		SET_DELAY(0x0000, inst, 1), /*  3: jmp    0     side 0 [T1 - 1]  */                \
 	};                                                                                         \
                                                                                                    \
+	PM_DEVICE_DT_INST_DEFINE(inst, ws2812_rpi_pico_pio_pm_action);                             \
 	static const struct ws2812_rpi_pico_pio_config rpi_pico_pio_ws2812_##inst##_config = {     \
 		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),                                     \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),                                      \
@@ -245,7 +305,7 @@ static int ws2812_rpi_pico_pio_init(const struct device *dev)
 			},                                                                         \
 	};                                                                                         \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(inst, &ws2812_rpi_pico_pio_init, NULL, NULL,                         \
+	DEVICE_DT_INST_DEFINE(inst, &ws2812_rpi_pico_pio_init, PM_DEVICE_DT_INST_GET(inst), NULL,  \
 			      &rpi_pico_pio_ws2812_##inst##_config, POST_KERNEL,                   \
 			      CONFIG_LED_STRIP_INIT_PRIORITY, NULL);
 
