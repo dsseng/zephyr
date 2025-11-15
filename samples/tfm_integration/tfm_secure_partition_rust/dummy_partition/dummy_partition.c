@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "psa/error.h"
 #include "psa/service.h"
 #include "psa_manifest/tfm_dummy_partition.h"
 
@@ -95,6 +96,11 @@ static void dp_signal_handle(psa_signal_t signal, dp_func_t pfn)
 	psa_msg_t msg;
 
 	status = psa_get(signal, &msg);
+	if (status != PSA_SUCCESS) {
+		psa_panic();
+		return;
+	}
+
 	switch (msg.type) {
 	case PSA_IPC_CONNECT:
 		psa_reply(msg.handle, PSA_SUCCESS);
