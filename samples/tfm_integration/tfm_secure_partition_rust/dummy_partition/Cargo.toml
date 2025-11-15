@@ -1,0 +1,17 @@
+# Copyright (c) 2024 Linaro LTD
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+# This must be rustlet for now.
+name = "rustlet"
+version = "0.1.0"
+edition = "2021"
+description = "A sample hello world application in Rust"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+# bindgen = { version = "0.70.1", features = ["experimental"] }
+# zephyr = "0.1.0"
