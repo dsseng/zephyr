@@ -38,9 +38,9 @@ target_include_directories(tfm_partitions
 #   message(FATAL_ERROR "Rust TZ partitions only supported on Cortex-M")
 # endif()
 
-if(CONFIG_DEBUG)
-  set(RUST_BUILD_TYPE "debug")
-  set(rust_build_type_arg "")
+if(TFM_DEBUG_SYMBOLS)
+  set(RUST_BUILD_TYPE "release-with-debug")
+  set(rust_build_type_arg "--profile=release-with-debug")
 else()
   set(RUST_BUILD_TYPE "release")
   set(rust_build_type_arg "--release")
@@ -50,8 +50,13 @@ set(CARGO_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/rust/target")
 set(RUST_LIBRARY "${CARGO_TARGET_DIR}/${RUST_TARGET}/${RUST_BUILD_TYPE}/librustlet.a")
 set(DUMMY_FILE "${CMAKE_BINARY_DIR}/always-run-cargo.dummy")
 
+set(MBEDTLS_CONFIG "-DMBEDTLS_CONFIG_FILE=<${TFM_MBEDCRYPTO_PSA_CRYPTO_CONFIG_PATH}>")
+
 set(RUST_CFLAGS -fshort-enums)
-list(APPEND RUST_CFLAGS -DMBEDTLS_CONFIG_FILE=\\\"/tmp/zephyr/zephyr/modules/mbedtls/configs/config-mbedtls.h\\\"${llext_filt_flags})
+list(APPEND RUST_CFLAGS "${MBEDTLS_CONFIG}")
+
+set(CLANG_ARGS -I${INSTALL_INTERFACE_INC_DIR})
+list(APPEND CLANG_ARGS "${MBEDTLS_CONFIG}")
 
 add_custom_command(
   OUTPUT ${DUMMY_FILE}
@@ -60,19 +65,13 @@ add_custom_command(
   COMMAND
     ${CMAKE_COMMAND} -E
     env BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
-    ZEPHYR_BASE=${ZEPHYR_BASE}
-    DOTCONFIG=${DOTCONFIG}
-    ZEPHYR_DTS=${ZEPHYR_DTS}
-    INCLUDE_DIRS="${include_dirs}"
-    INCLUDE_DEFINES="${include_defines}"
-    WRAPPER_FILE="${WRAPPER_FILE}"
-    DT_AUGMENTS="${DT_AUGMENTS}"
-    BINARY_DIR_INCLUDE_GENERATED="${BINARY_DIR_INCLUDE_GENERATED}"
-    BINDGEN_EXTRA_CLANG_ARGS="-DMBEDTLS_CONFIG_FILE=</tmp/zephyr/zephyr/modules/mbedtls/configs/config-mbedtls.h>"
-    CC=clang
+    BINDGEN_EXTRA_CLANG_ARGS="${CLANG_ARGS}"
+    CC="${CMAKE_C_COMPILER}"
     CFLAGS="${RUST_CFLAGS}"
-    MBEDTLS_LIB_DIR=/tmp/tmpdir
-    MBEDTLS_INCLUDE_DIR=/tmp/zephyr/modules/tee/tf-m/trusted-firmware-m/interface/include
+    # dummy needed for build scripts, does not end up used
+    # since we never link via Cargo
+    MBEDTLS_LIB_DIR="stub"
+    MBEDTLS_INCLUDE_DIR="${INTERFACE_INC_DIR}"
     cargo build
     ${rust_build_type_arg}
 
@@ -87,7 +86,7 @@ add_custom_command(
     ${command_paths}
     --target ${RUST_TARGET}
     --target-dir ${CARGO_TARGET_DIR}
-  COMMENT "Building Rust application"
+  COMMENT "Building Rust Secure Partition"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -97,11 +96,6 @@ add_custom_target(librustlet ALL
 )
 
 add_dependencies(tfm_app_rot_partition_dp librustlet)
-
-# add_library(librustlet STATIC IMPORTED GLOBAL)
-# set_target_properties(librustlet PROPERTIES
-#   IMPORTED_LOCATION /tmp/zephyr/zephyr/samples/tfm_integration/tfm_secure_partition/dummy_partition/target/thumbv8m.main-none-eabi/debug/librustlet.a
-# )
 
 target_link_libraries(tfm_app_rot_partition_dp
     PRIVATE

@@ -14,3 +14,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 psa-crypto = { version = "0.12.0", default-features = false, features = ["operations"], git = "https://github.com/parallaxsecond/rust-psa-crypto.git", rev = "c076266423b0831935dcb871aaacb33ce376b8fd" }
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true
