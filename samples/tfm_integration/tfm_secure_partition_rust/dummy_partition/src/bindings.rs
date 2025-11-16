@@ -3,21 +3,13 @@ use core::ffi::c_void;
 // FIXME: bindgen from generated manifest
 pub const TFM_DP_SECRET_DIGEST_SIGNAL: u32 = 0x10;
 
-// FIXME: bindgen from TF-M source tree
+// FIXME: bindgen from TF-M source tree for FF-M/PSA Secure Partition API
 unsafe extern "C" {
     pub fn psa_panic();
     pub fn psa_wait(signal_mask: u32, timeout: u32) -> u32;
     pub fn psa_get(signal: u32, msg: &mut PsaMsg) -> i32;
     pub fn psa_reply(msg_handle: i32, status: i32);
     pub fn psa_read(msg_handle: i32, invec_idx: u32, buf: *mut u8, num_bytes: usize) -> usize;
-    pub fn psa_hash_compute(
-        alg: u32,
-        input: *const u8,
-        len: usize,
-        hash: *mut u8,
-        hash_size: usize,
-        hash_len: *mut usize,
-    ) -> i32;
     pub fn psa_write(msg_handle: i32, outvec_idx: u32, buf: *const u8, num_bytes: usize);
 }
 
@@ -26,14 +18,11 @@ pub const PSA_BLOCK: u32 = 0x80000000;
 pub const PSA_IPC_CALL: i32 = 0;
 pub const PSA_IPC_CONNECT: i32 = -1;
 pub const PSA_IPC_DISCONNECT: i32 = -2;
-pub const PSA_SUCCESS: i32 = 0;
 pub const PSA_ERROR_PROGRAMMER_ERROR: i32 = -129;
-pub const PSA_ERROR_INVALID_ARGUMENT: i32 = -135;
-pub const PSA_ALG_SHA_256: u32 = 0x02000009;
 
 pub const PSA_MAX_IOVEC: usize = 4;
 #[derive(Default)]
-#[repr(C, packed)]
+#[repr(C)]
 pub struct PsaMsg {
     pub msg_type: i32, /* One of the following values:
                         * PSA_IPC_CONNECT

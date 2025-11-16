@@ -13,5 +13,4 @@ license = "Apache-2.0"
 crate-type = ["staticlib"]
 
 [dependencies]
-# bindgen = { version = "0.70.1", features = ["experimental"] }
-# zephyr = "0.1.0"
+psa-crypto = { version = "0.12.0", default-features = false, features = ["operations"], git = "https://github.com/parallaxsecond/rust-psa-crypto.git", rev = "c076266423b0831935dcb871aaacb33ce376b8fd" }
