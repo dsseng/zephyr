@@ -63,6 +63,7 @@ struct counter_alarm_cfg alarm_cfg;
 #define SAMPLE_TIMER DT_NODELABEL(timer)
 #elif CONFIG_SOC_SERIES_RP2350
 #define SAMPLE_TIMER DT_NODELABEL(timer0)
+// #define TIMER DT_NODELABEL(aon_timer)
 #endif
 #elif defined(CONFIG_COUNTER_TIMER_MAX32)
 #define SAMPLE_TIMER DT_NODELABEL(counter0)
