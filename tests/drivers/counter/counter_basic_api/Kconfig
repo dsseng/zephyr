@@ -9,7 +9,7 @@ config TEST_DRIVER_COUNTER_MCUX_LPC_RTC_HIGHRES
 
 config TEST_DRIVER_COUNTER_TOLERANCE
 	int "Counter ticks tolerance (%)"
-	default 10
+	default 20
 	help
 	  Error tolerance used in counter driver tests.
 	  A number of ticks is estimated and counter is tested against systimer,

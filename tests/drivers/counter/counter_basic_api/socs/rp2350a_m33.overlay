@@ -5,3 +5,7 @@
 &timer1 {
 	status = "okay";
 };
+
+&aon_timer {
+	status = "okay";
+};

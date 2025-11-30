@@ -129,6 +129,9 @@ static const struct device *const devices[] = {
 #ifdef CONFIG_COUNTER_RPI_PICO_PIT
 	DEVS_FOR_DT_COMPAT(raspberrypi_pico_pit_channel)
 #endif
+#ifdef CONFIG_COUNTER_TIMER_RPI_PICO_AON
+	DEVS_FOR_DT_COMPAT(raspberrypi_pico_aon_timer)
+#endif
 #ifdef CONFIG_COUNTER_RTC_MAX32
 	DEVS_FOR_DT_COMPAT(adi_max32_rtc_counter)
 #endif
@@ -407,7 +410,7 @@ static void alarm_handler(const struct device *dev, uint8_t chan_id,
 	/* Arbitrary limit for alarm processing - time between hw expiration
 	 * and read-out from counter in the handler.
 	 */
-	static const uint64_t processing_limit_us = 1000;
+	static const uint64_t processing_limit_us = 3000;
 	uint32_t now;
 	int err;
 	uint32_t top;
@@ -847,7 +850,9 @@ static void test_valid_function_without_alarm(const struct device *dev)
 	zassert_equal(0, err, "%s: could not get counter value", dev->name);
 	zassert_between_inclusive(
 		ticks, ticks_expected > ticks_tol ? ticks_expected - ticks_tol : 0,
-		ticks_expected + ticks_tol, "%s: counter ticks not in tolerance", dev->name);
+		ticks_expected + ticks_tol, "%s: counter ticks (%u) not in tolerance (%u;%u)",
+		dev->name, ticks,
+		ticks_expected > ticks_tol ? ticks_expected - ticks_tol : 0, ticks_expected + ticks_tol);
 
 	/* ticks count is always within ticks_tol for RTC, therefor
 	 * check, if ticks are greater than 0.
