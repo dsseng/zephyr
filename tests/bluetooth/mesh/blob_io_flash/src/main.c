@@ -48,7 +48,7 @@ ZTEST_SUITE(blob_io_flash, NULL, NULL, NULL, NULL, NULL);
 ZTEST(blob_io_flash, test_chunk_read)
 {
 	const struct flash_area *fa = NULL;
-	struct bt_mesh_blob_xfer xfer;
+	struct bt_mesh_blob_xfer xfer = { 0 };
 	struct bt_mesh_blob_block block = { 0 };
 	struct bt_mesh_blob_chunk chunk = { 0 };
 	size_t remaining = SLOT1_PARTITION_SIZE;
@@ -158,7 +158,7 @@ ZTEST(blob_io_flash, test_chunk_read)
 
 ZTEST(blob_io_flash, test_chunk_write)
 {
-	struct bt_mesh_blob_xfer xfer;
+	struct bt_mesh_blob_xfer xfer = { 0 };
 	struct bt_mesh_blob_block block = { 0 };
 	struct bt_mesh_blob_chunk chunk = { 0 };
 	size_t remaining = SLOT1_PARTITION_SIZE;
