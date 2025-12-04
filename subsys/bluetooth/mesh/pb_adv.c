@@ -806,7 +806,7 @@ static int bearer_ctl_send(struct bt_mesh_adv *adv)
 
 static void buf_sent(int err, void *user_data)
 {
-	enum prov_bearer_link_status reason = (enum prov_bearer_link_status)(int)user_data;
+	enum prov_bearer_link_status reason = (enum prov_bearer_link_status)(size_t)user_data;
 
 	atomic_clear_bit(link.flags, ADV_LINK_ACK_SENDING);
 
