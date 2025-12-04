@@ -1357,8 +1357,10 @@ int net_context_connect(struct net_context *context,
 			k_timeout_t timeout,
 			void *user_data)
 {
+	struct net_sockaddr local_addr = {
+		.sa_family = net_context_get_family(context),
+	};
 	struct net_sockaddr *laddr = NULL;
-	struct net_sockaddr local_addr __unused;
 	uint16_t lport, rport;
 	int ret;
 
