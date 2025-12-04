@@ -578,6 +578,7 @@ static void isr_rx(void *param)
 	uint8_t data_chan_use;
 	uint8_t crc_init[3];
 	uint8_t stream_curr;
+	uint8_t bis_idx_old;
 	uint8_t rssi_ready;
 	uint32_t start_us;
 	uint8_t new_burst;
@@ -761,7 +762,7 @@ static void isr_rx(void *param)
 	}
 
 isr_rx_done:
-	uint8_t bis_idx_old = bis_idx;
+	bis_idx_old = bis_idx;
 
 	new_burst = 0U;
 	skipped = 0U;
