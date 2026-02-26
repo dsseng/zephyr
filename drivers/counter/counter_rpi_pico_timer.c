@@ -96,7 +96,13 @@ static int counter_rpi_pico_timer_set_alarm(const struct device *dev, uint8_t id
 	chdata->callback = alarm_cfg->callback;
 	chdata->user_data = alarm_cfg->user_data;
 
-	missed = timer_hardware_alarm_set_target(config->timer, id, alarm_at);
+	if (alarm_at + data->guard_period <= timer_time_us_32(config->timer)) {
+		missed = true;
+	LOG_WRN("222current: %u at: %llu guard: %u", 1111, alarm_at, data->guard_period);
+	} else {
+		missed = timer_hardware_alarm_set_target(config->timer, id, alarm_at);
+	LOG_WRN("333current: %u at: %llu guard: %u", 1111, alarm_at, data->guard_period);
+	}
 
 	if (missed) {
 		if (alarm_cfg->flags & COUNTER_ALARM_CFG_EXPIRE_WHEN_LATE) {
@@ -104,8 +110,10 @@ static int counter_rpi_pico_timer_set_alarm(const struct device *dev, uint8_t id
 		}
 		chdata->callback = NULL;
 		chdata->user_data = NULL;
+	LOG_WRN("111 current: %u at: %llu guard: %u", 1111, alarm_at, data->guard_period);
 		return -ETIME;
 	}
+	LOG_WRN("current: %u at: %llu guard: %u", 1111, alarm_at, data->guard_period);
 
 	return 0;
 }
