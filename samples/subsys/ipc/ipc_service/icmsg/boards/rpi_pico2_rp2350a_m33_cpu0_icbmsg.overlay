@@ -17,7 +17,7 @@
 			dcache-alignment = <32>;
 			tx-blocks = <32>;
 			rx-blocks = <32>;
-			mboxes = <&mbox>, <&mbox>;
+			mboxes = <&mbox 0>, <&mbox 1>;
 			mbox-names = "tx", "rx";
 			status = "okay";
 		};

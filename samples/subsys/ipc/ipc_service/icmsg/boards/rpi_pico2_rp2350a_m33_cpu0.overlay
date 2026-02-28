@@ -15,7 +15,7 @@
 			tx-region = <&sram8>;
 			rx-region = <&sram9>;
 			dcache-alignment = <32>;
-			mboxes = <&mbox>, <&mbox>;
+			mboxes = <&mbox 0>, <&mbox 1>;
 			mbox-names = "tx", "rx";
 			status = "okay";
 		};
