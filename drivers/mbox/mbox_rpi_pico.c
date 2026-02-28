@@ -19,10 +19,13 @@ LOG_MODULE_REGISTER(mbox_rpi_pico, CONFIG_MBOX_LOG_LEVEL);
 #define MAILBOX_MBOX_SIZE sizeof(uint32_t)
 #define MAILBOX_DEV_NAME mbox0
 
+#define N_CH 4
+
 struct rpi_pico_mailbox_data {
 	const struct device *dev;
-	mbox_callback_t cb;
-	void *user_data;
+	mbox_callback_t cb[N_CH];
+	void *user_data[N_CH];
+	uint32_t enabled_mask;
 };
 
 static struct rpi_pico_mailbox_data rpi_pico_mbox_data;
@@ -42,15 +45,15 @@ static int rpi_pico_mbox_send(const struct device *dev,
 				const struct mbox_msg *msg)
 {
 	ARG_UNUSED(dev);
-	ARG_UNUSED(channel);
 
 	if (!rpi_pico_mbox_write_ready(sio_hw)) {
+		LOG_WRN("aaaaaa");
 		return -EBUSY;
 	}
 	/* Signalling mode: send 0 as dummy data. */
 	if (msg == NULL) {
 		LOG_DBG("CPU %d: send IP signal", sio_hw->cpuid);
-		rpi_pico_mbox_write(sio_hw, 0);
+		rpi_pico_mbox_write(sio_hw, channel);
 		__SEV();
 		return 0;
 	}
@@ -70,14 +73,16 @@ static int rpi_pico_mbox_register_callback(const struct device *dev,
 					mbox_callback_t cb,
 					void *user_data)
 {
-	ARG_UNUSED(channel);
-
 	struct rpi_pico_mailbox_data *data = dev->data;
 	uint32_t key;
 
+	if (channel >= N_CH) {
+		return -EINVAL;
+	}
+
 	key = irq_lock();
-	data->cb = cb;
-	data->user_data = user_data;
+	data->cb[channel] = cb;
+	data->user_data[channel] = user_data;
 	irq_unlock(key);
 
 	return 0;
@@ -87,7 +92,7 @@ static int rpi_pico_mbox_mtu_get(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	return MAILBOX_MBOX_SIZE;
+	return 0;
 }
 
 static uint32_t rpi_pico_mbox_max_channels_get(const struct device *dev)
@@ -95,16 +100,30 @@ static uint32_t rpi_pico_mbox_max_channels_get(const struct device *dev)
 	ARG_UNUSED(dev);
 
 	/* Only one channel per CPU supported. */
-	return 1;
+	return 4;
 }
 
 static int rpi_pico_mbox_set_enabled(const struct device *dev,
 				mbox_channel_id_t channel, bool enable)
 {
-	ARG_UNUSED(dev);
-	ARG_UNUSED(channel);
+	struct rpi_pico_mailbox_data *data = dev->data;
 
-	if (enable) {
+	if (channel >= N_CH) {
+		return -EINVAL;
+	}
+
+	if ((enable == 0 && (!(data->enabled_mask & BIT(channel)))) ||
+	    (enable != 0 &&   (data->enabled_mask & BIT(channel)))) {
+		return -EALREADY;
+	}
+
+	if (enable && (data->cb[channel] == NULL)) {
+		LOG_WRN("Enabling channel without a registered callback\n");
+	}
+
+	data->enabled_mask ^= BIT(channel);
+
+	if (!!data->enabled_mask) {
 		irq_enable(DT_INST_IRQ_BY_NAME(0, MAILBOX_DEV_NAME, irq));
 	} else {
 		irq_disable(DT_INST_IRQ_BY_NAME(0, MAILBOX_DEV_NAME, irq));
@@ -129,12 +148,12 @@ static void rpi_pico_mbox_isr(const struct device *dev)
 		return;
 	}
 
-	if (data->cb != NULL) {
-		uint32_t d = rpi_pico_mbox_read(sio_hw);
-		struct mbox_msg msg = {
-			.data = &d,
-			.size = sizeof(d)};
-		data->cb(dev, 0, data->user_data, &msg);
+	uint32_t d = rpi_pico_mbox_read(sio_hw);
+	if (data->cb[d] != NULL) {
+		// struct mbox_msg msg = {
+		// 	.data = &d,
+		// 	.size = sizeof(d)};
+		data->cb[d](dev, d, data->user_data[d], NULL);
 	}
 	rpi_pico_mbox_drain(sio_hw);
 }

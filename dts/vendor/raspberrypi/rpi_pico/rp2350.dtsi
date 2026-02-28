@@ -486,24 +486,18 @@
 				interrupts = <25 RPI_PICO_DEFAULT_IRQ_PRIORITY>;
 				interrupt-names = "mbox0";
 				fifo-depth = <4>;
-				#mbox-cells = <0>;
+				#mbox-cells = <1>;
 				status = "disabled";
 			};
 		};
 	};
 
-	ipm_mbox: ipm-mbox {
-		/*
-		 * The zephyr,mbox-ipm driver expects two mailbox
-		 * channels, but the mailbox block in the RP2350
-		 * implements a single instance per core. Point the
-		 * two driver channels to the same single mbox.
-		 */
-		compatible = "zephyr,mbox-ipm";
-		mboxes = <&mbox>, <&mbox>;
-		mbox-names = "tx", "rx";
-		status = "disabled";
-	};
+	// ipm_mbox: ipm-mbox {
+	// 	compatible = "zephyr,mbox-ipm";
+	// 	mboxes = <&mbox 0>, <&mbox 1>;
+	// 	mbox-names = "tx", "rx";
+	// 	status = "disabled";
+	// };
 
 	pinctrl: pin-controller {
 		compatible = "raspberrypi,pico-pinctrl";

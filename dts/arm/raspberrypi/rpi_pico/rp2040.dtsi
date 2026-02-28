@@ -448,21 +448,15 @@
 					     <16 RPI_PICO_DEFAULT_IRQ_PRIORITY>;
 				interrupt-names = "mbox0", "mbox1";
 				fifo-depth = <8>;
-				#mbox-cells = <0>;
+				#mbox-cells = <1>;
 				status = "disabled";
 			};
 		};
 	};
 
 	ipm_mbox: ipm-mbox {
-		/*
-		 * The zephyr,mbox-ipm driver expects two mailbox
-		 * channels, but the mailbox block in the RP2040
-		 * implements a single instance per core. Point the
-		 * two driver channels to the same single mbox.
-		 */
 		compatible = "zephyr,mbox-ipm";
-		mboxes = <&mbox>, <&mbox>;
+		mboxes = <&mbox 0>, <&mbox 1>;
 		mbox-names = "tx", "rx";
 		status = "disabled";
 	};

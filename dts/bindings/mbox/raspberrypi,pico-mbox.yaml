@@ -12,3 +12,6 @@ properties:
     type: int
     description: number of entries that the mailbox FIFO can hold
     required: true
+
+mbox-cells:
+  - channel
