@@ -33,7 +33,7 @@
 		 * Then add image-source to the &cpu1_launcher on cpu0
 		 * zephyr,code-partition = &cpu1_slot0_partition;
 		 */
-		zephyr,code-partition = &sram0_cpu1;
+		zephyr,code-partition = &cpu1_slot0_partition;
 	};
 };
 
