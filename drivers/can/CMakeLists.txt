@@ -40,12 +40,13 @@ zephyr_library_sources_ifdef(CONFIG_CAN_TCAN4X5X can_tcan4x5x.c)
 zephyr_library_sources_ifdef(CONFIG_CAN_XMC4XXX can_xmc4xxx.c)
 # zephyr-keep-sorted-stop
 
+target_sources(native_simulator INTERFACE can_native_linux_adapt.c)
 if(CONFIG_CAN_NATIVE_LINUX)
   if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL Linux)
     zephyr_library_include_directories(${ZEPHYR_BASE}/subsys/net/l2)
     zephyr_library_sources(can_native_linux.c)
 
-    target_sources(native_simulator INTERFACE can_native_linux_adapt.c)
+#    target_sources(native_simulator INTERFACE can_native_linux_adapt.c)
   else()
     message(FATAL_ERROR "CONFIG_CAN_NATIVE_LINUX is only available on Linux")
   endif()
