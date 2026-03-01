@@ -44,7 +44,6 @@
 		zephyr,bt-hci = &bt_hci_ipc0;
 		nordic,802154-spinel-ipc = &ipc0;
 		zephyr,ieee802154 = &ieee802154;
-		zephyr,canbus = &can0;
 	};
 
 	soc {
@@ -87,14 +86,6 @@
 
 	/delete-node/ cpus;
 	/delete-node/ sw-pwm;
-
-	can0: can {
-		compatible = "zephyr,native-linux-can";
-		/* adjust zcan0 to desired host interface or create an alternative
-		 * name, e.g.: sudo ip link property add dev vcan0 altname zcan0
-		 */
-		host-interface = "zcan0";
-	};
 };
 
 &ieee802154 {
