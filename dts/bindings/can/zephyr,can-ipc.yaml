@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Dmitrii Sharshakov
+# SPDX-License-Identifier: Apache-2.0
+
+description: CAN controller connected via IPC
+
+compatible: "zephyr,can-ipc"
+
+include: can-controller.yaml
