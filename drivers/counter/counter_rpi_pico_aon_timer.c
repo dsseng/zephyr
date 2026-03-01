@@ -8,6 +8,7 @@
  */
 
 #include <hardware/powman.h>
+#include <hardware/structs/otp.h>
 
 #include <zephyr/sys/barrier.h>
 #include <zephyr/drivers/counter.h>
@@ -249,7 +250,11 @@ static int counter_rpi_pico_aon_timer_init(const struct device *dev)
 	/* TODO: allow running off XOSC, for purposes other than wakeup source
 	 * TODO: apply LPOSC frequency from OTP, potentially recalibrate when restarting
 	 */
-	powman_timer_set_1khz_tick_source_lposc();
+	LOG_WRN("calib start");
+	while ((otp_hw->usr & OTP_USR_DCTRL_BITS) == 0);
+	LOG_WRN("calib %x (%x)", ((*(uint32_t *)(0x40130000+0x20))&0xffff0000) >> 16, 0x69de);
+	powman_timer_set_1khz_tick_source_lposc_with_hz(0x69de);
+	// powman_timer_set_1khz_tick_source_lposc();
 
 	return 0;
 }
