@@ -36,14 +36,20 @@
 			mboxes = <&mbox 0>, <&mbox 1>;
 			mbox-names = "tx", "rx";
 			status = "okay";
+
+			// Remote bus
+			can0: can-ipc {
+				compatible = "zephyr,can-ipc";
+			};
 		};
 	};
 
-	can0: can {
-		compatible = "zephyr,native-linux-can";
-		/* adjust zcan0 to desired host interface or create an alternative
-		 * name, e.g.: sudo ip link property add dev vcan0 altname zcan0
-		 */
-		host-interface = "zcan0";
-	};
+	// Test local bus
+	// can0: can {
+	// 	compatible = "zephyr,native-linux-can";
+	// 	/* adjust zcan0 to desired host interface or create an alternative
+	// 	 * name, e.g.: sudo ip link property add dev vcan0 altname zcan0
+	// 	 */
+	// 	host-interface = "zcan0";
+	// };
 };

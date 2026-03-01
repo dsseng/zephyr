@@ -9,6 +9,8 @@
 / {
 	chosen {
 		/delete-property/ zephyr,ipc_shm;
+		zephyr,can-ipc = &ipc0;
+		zephyr,canbus = &can0;
 	};
 
 	reserved-memory {
@@ -35,5 +37,13 @@
 			mbox-names = "rx", "tx";
 			status = "okay";
 		};
+	};
+
+	can0: can {
+		compatible = "zephyr,native-linux-can";
+		/* adjust zcan0 to desired host interface or create an alternative
+		 * name, e.g.: sudo ip link property add dev vcan0 altname zcan0
+		 */
+		host-interface = "zcan0";
 	};
 };

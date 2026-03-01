@@ -8,15 +8,15 @@ if(SB_CONFIG_NET_CORE_IMAGE_HCI_IPC)
   set(NET_APP_SRC_DIR ${ZEPHYR_BASE}/samples/${NET_APP})
 
   ExternalZephyrProject_Add(
-    APPLICATION ${NET_APP}
+    APPLICATION remote
     SOURCE_DIR  ${NET_APP_SRC_DIR}
     BOARD       ${SB_CONFIG_NET_CORE_BOARD}
   )
 
-  native_simulator_set_child_images(${DEFAULT_IMAGE} ${NET_APP})
+  native_simulator_set_child_images(${DEFAULT_IMAGE} remote)
 endif()
 
 native_simulator_set_final_executable(${DEFAULT_IMAGE})
 
 
-native_simulator_set_primary_mcu_index(${DEFAULT_IMAGE} ${NET_APP})
+native_simulator_set_primary_mcu_index(${DEFAULT_IMAGE} remote)
