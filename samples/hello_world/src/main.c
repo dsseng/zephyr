@@ -9,6 +9,7 @@
 #include "zephyr/ipc/ipc_service.h"
 #include "zephyr/kernel/thread.h"
 #include "zephyr/logging/log.h"
+#include <zephyr/drivers/can_ipc.h>
 #include <stdio.h>
 
 LOG_MODULE_REGISTER(can_ipc, CONFIG_CAN_LOG_LEVEL);
@@ -50,6 +51,7 @@ void rx_thread(void *arg1, void *arg2, void *arg3)
 		.mask = 0
 	};
 	struct can_frame frame;
+	struct can_ipc_proto_frame f;
 	int filter_id;
 
 	filter_id = can_add_rx_filter_msgq(can_bus, &rx_msgq, &filter);
@@ -61,7 +63,18 @@ void rx_thread(void *arg1, void *arg2, void *arg3)
 
 		LOG_WRN("BBBBB Frame received: %u\n", frame.id);
 
-		ipc_service_send(&ipc_ep, &frame.id, 4);
+		f.id = frame.id;
+		f.flags = 0;
+		if (frame.flags & CAN_FRAME_IDE) {
+			f.flags |= CAN_IPC_FRAME_IDE;
+		}
+		if (frame.flags & CAN_FRAME_RTR) {
+			f.flags |= CAN_IPC_FRAME_RTR;
+		}
+		f.dlc = frame.dlc;
+		memcpy(f.data, frame.data, sizeof(f.data));
+
+		ipc_service_send(&ipc_ep, &f, sizeof(f));
 	}
 }
 

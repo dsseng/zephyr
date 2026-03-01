@@ -17,6 +17,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/drivers/can_ipc.h>
 
 LOG_MODULE_REGISTER(can_ipc, CONFIG_CAN_LOG_LEVEL);
 
@@ -434,12 +435,45 @@ static void can_ipc_bound(void *priv)
 	k_sem_give(&ipc->bound_sem);
 }
 
-static void can_ipc_rx(const void *data, size_t len, void *priv)
+static void can_ipc_rx(const void *pkt, size_t len, void *priv)
 {
 	const struct device *dev = priv;
+	struct can_ipc_data *data = dev->data;
+	struct can_frame frame;
+	struct can_ipc_proto_frame *f;
+	struct can_ipc_filter *filter;
 
 	// bt_ipc_rx(dev, data, len);
-	LOG_WRN("%s: AAAAA: rx %d", dev->name, (len > 0 ? ((uint32_t *)data)[0] : 1337));
+	LOG_WRN("%s: AAAAA: rx len %d", dev->name, len);
+	if (len != sizeof(struct can_ipc_proto_frame)) {
+		LOG_ERR("Length %d is not equal to expected %d", len, sizeof(struct can_ipc_proto_frame));
+		return;
+	}
+
+	f = (struct can_ipc_proto_frame *)pkt;
+
+	frame.id = f->id;
+	frame.dlc = f->dlc;
+	memcpy(frame.data, f->data, sizeof(f->data));
+	frame.flags = 0;
+	if (f->flags & CAN_IPC_FRAME_IDE) {
+		frame.flags |= CAN_FRAME_IDE;
+	}
+	if (f->flags & CAN_IPC_FRAME_RTR) {
+		frame.flags |= CAN_FRAME_RTR;
+	}
+
+	k_mutex_lock(&data->mtx, K_FOREVER);
+
+	for (int i = 0; i < CONFIG_CAN_IPC_MAX_FILTERS; i++) {
+		filter = &data->filters[i];
+		if (filter->rx_cb != NULL &&
+			can_frame_matches_filter(&frame, &filter->filter)) {
+			receive_frame(dev, &frame, filter);
+		}
+	}
+
+	k_mutex_unlock(&data->mtx);
 }
 
 #define CAN_IPC_MAX_BITRATE 1000000
