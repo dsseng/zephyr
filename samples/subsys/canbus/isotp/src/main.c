@@ -37,7 +37,7 @@ const struct isotp_msg_id tx_addr_0_5 = {
 #endif
 };
 
-const struct device *can_dev;
+const struct device *can_bus;
 struct isotp_recv_ctx recv_ctx_8_0;
 struct isotp_recv_ctx recv_ctx_0_5;
 
@@ -64,7 +64,7 @@ void rx_8_0_thread(void *arg1, void *arg2, void *arg3)
 	int ret, rem_len, received_len;
 	struct net_buf *buf;
 
-	ret = isotp_bind(&recv_ctx_8_0, can_dev,
+	ret = isotp_bind(&recv_ctx_8_0, can_bus,
 			 &tx_addr_8_0, &rx_addr_8_0,
 			 &fc_opts_8_0, K_FOREVER);
 	if (ret != ISOTP_N_OK) {
@@ -101,7 +101,7 @@ void rx_0_5_thread(void *arg1, void *arg2, void *arg3)
 	int ret, received_len;
 	static uint8_t rx_buffer[32];
 
-	ret = isotp_bind(&recv_ctx_0_5, can_dev,
+	ret = isotp_bind(&recv_ctx_0_5, can_bus,
 			 &tx_addr_0_5, &rx_addr_0_5,
 			 &fc_opts_0_5, K_FOREVER);
 	if (ret != ISOTP_N_OK) {
@@ -140,21 +140,21 @@ int main(void)
 	static struct isotp_send_ctx send_ctx_0_5;
 	int ret = 0;
 
-	can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
-	if (!device_is_ready(can_dev)) {
+	can_bus = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
+	if (!device_is_ready(can_bus)) {
 		printk("CAN: Device driver not ready.\n");
 		return 0;
 	}
 
 	can_mode_t mode = (IS_ENABLED(CONFIG_SAMPLE_LOOPBACK_MODE) ? CAN_MODE_LOOPBACK : 0) |
 			  (IS_ENABLED(CONFIG_SAMPLE_CAN_FD_MODE) ? CAN_MODE_FD : 0);
-	ret = can_set_mode(can_dev, mode);
+	ret = can_set_mode(can_bus, mode);
 	if (ret != 0) {
 		printk("CAN: Failed to set mode [%d]", ret);
 		return 0;
 	}
 
-	ret = can_start(can_dev);
+	ret = can_start(can_bus);
 	if (ret != 0) {
 		printk("CAN: Failed to start device [%d]\n", ret);
 		return 0;
@@ -184,7 +184,7 @@ int main(void)
 
 	while (1) {
 		k_msleep(1000);
-		ret = isotp_send(&send_ctx_0_5, can_dev,
+		ret = isotp_send(&send_ctx_0_5, can_bus,
 				 tx_data_small, sizeof(tx_data_small),
 				 &tx_addr_0_5, &rx_addr_0_5,
 				 send_complette_cb, NULL);
@@ -193,7 +193,7 @@ int main(void)
 			       tx_addr_0_5.std_id, ret);
 		}
 
-		ret = isotp_send(&send_ctx_8_0, can_dev,
+		ret = isotp_send(&send_ctx_8_0, can_bus,
 				 tx_data_large, sizeof(tx_data_large),
 				 &tx_addr_8_0, &rx_addr_8_0, NULL, NULL);
 		if (ret != ISOTP_N_OK) {

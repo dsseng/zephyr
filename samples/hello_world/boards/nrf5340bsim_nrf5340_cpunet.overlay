@@ -10,6 +10,7 @@
 	chosen {
 		/delete-property/ zephyr,ipc_shm;
 		zephyr,can-ipc = &ipc0;
+		zephyr,canbus = &can0;
 	};
 
 	reserved-memory {
