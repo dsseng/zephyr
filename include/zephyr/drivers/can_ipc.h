@@ -12,6 +12,7 @@
 #ifndef ZEPHYR_INCLUDE_DRIVERS_CAN_IPC_H_
 #define ZEPHYR_INCLUDE_DRIVERS_CAN_IPC_H_
 
+#include "zephyr/drivers/can.h"
 #include <stdint.h>
 
 /** Frame uses extended (29-bit) CAN ID */
@@ -31,5 +32,37 @@ struct can_ipc_proto_frame {
 	/** Payload data accessed as unsigned 8 bit values. */
 	uint8_t data[8];
 } __attribute__((__packed__));
+
+static inline void can_frame_to_ipc(
+    const struct can_frame *from,
+    struct can_ipc_proto_frame *to
+) {
+    to->id = from->id;
+    to->flags = 0;
+    if (from->flags & CAN_FRAME_IDE) {
+        to->flags |= CAN_IPC_FRAME_IDE;
+    }
+    if (from->flags & CAN_FRAME_RTR) {
+        to->flags |= CAN_IPC_FRAME_RTR;
+    }
+    to->dlc = from->dlc;
+    memcpy(to->data, from->data, sizeof(to->data));
+}
+
+static inline void can_ipc_to_frame(
+    const struct can_ipc_proto_frame *from,
+    struct can_frame *to
+) {
+	to->id = from->id;
+	to->dlc = from->dlc;
+	memcpy(to->data, from->data, sizeof(from->data));
+	to->flags = 0;
+	if (from->flags & CAN_IPC_FRAME_IDE) {
+		to->flags |= CAN_FRAME_IDE;
+	}
+	if (from->flags & CAN_IPC_FRAME_RTR) {
+		to->flags |= CAN_FRAME_RTR;
+	}
+}
 
 #endif /* ZEPHYR_INCLUDE_DRIVERS_CAN_IPC_H_ */

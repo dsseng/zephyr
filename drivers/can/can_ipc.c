@@ -43,12 +43,8 @@ struct can_ipc_data {
 	struct can_driver_data common;
 	struct can_ipc_filter filters[CONFIG_CAN_IPC_MAX_FILTERS];
 	struct k_mutex mtx;
-	struct k_msgq tx_msgq;
-	char msgq_buffer[CONFIG_CAN_IPC_TX_MSGQ_SIZE * sizeof(struct can_ipc_frame)];
-	struct k_thread tx_thread_data;
 
 	struct ipc_ept ep;
-	struct k_sem bound_sem;
 
 	K_KERNEL_STACK_MEMBER(tx_thread_stack,
 		      CONFIG_CAN_IPC_TX_THREAD_STACK_SIZE);
@@ -68,57 +64,15 @@ static void receive_frame(const struct device *dev,
 	filter->rx_cb(dev, &frame_tmp, filter->cb_arg);
 }
 
-static void tx_thread(void *arg1, void *arg2, void *arg3)
-{
-	const struct device *dev = arg1;
-	struct can_ipc_data *data = dev->data;
-	struct can_ipc_frame frame;
-	struct can_ipc_filter *filter;
-	int ret;
-
-	ARG_UNUSED(arg2);
-	ARG_UNUSED(arg3);
-
-	while (1) {
-		ret = k_msgq_get(&data->tx_msgq, &frame, K_FOREVER);
-		if (ret < 0) {
-			LOG_DBG("Pend on TX queue returned without valid frame (err %d)", ret);
-			continue;
-		}
-		frame.cb(dev, 0, frame.cb_arg);
-
-		if ((data->common.mode & CAN_MODE_LOOPBACK) == 0U) {
-			continue;
-		}
-
-#ifndef CONFIG_CAN_ACCEPT_RTR
-		if ((frame.frame.flags & CAN_FRAME_RTR) != 0U) {
-			continue;
-		}
-#endif /* !CONFIG_CAN_ACCEPT_RTR */
-
-		k_mutex_lock(&data->mtx, K_FOREVER);
-
-		for (int i = 0; i < CONFIG_CAN_IPC_MAX_FILTERS; i++) {
-			filter = &data->filters[i];
-			if (filter->rx_cb != NULL &&
-			    can_frame_matches_filter(&frame.frame, &filter->filter)) {
-				receive_frame(dev, &frame.frame, filter);
-			}
-		}
-
-		k_mutex_unlock(&data->mtx);
-	}
-}
-
 static int can_ipc_send(const struct device *dev,
 			     const struct can_frame *frame,
 			     k_timeout_t timeout, can_tx_callback_t callback,
 			     void *user_data)
 {
 	struct can_ipc_data *data = dev->data;
-	struct can_ipc_frame loopback_frame;
 	uint8_t max_dlc = CAN_MAX_DLC;
+	struct can_ipc_proto_frame *f;
+	uint32_t size = sizeof(*f);
 	int ret;
 
 	LOG_DBG("Sending %d bytes on %s. Id: 0x%x, ID type: %s %s",
@@ -140,14 +94,16 @@ static int can_ipc_send(const struct device *dev,
 		return -ENETDOWN;
 	}
 
-	loopback_frame.frame = *frame;
-	loopback_frame.cb = callback;
-	loopback_frame.cb_arg = user_data;
+	ret = ipc_service_get_tx_buffer(&data->ep, (void **)&f, &size, K_MSEC(100));
+	if (ret != 0) {
+		return ret;
+	}
 
-	ret = k_msgq_put(&data->tx_msgq, &loopback_frame, timeout);
-	if (ret < 0) {
-		LOG_DBG("TX queue full (err %d)", ret);
-		return -EAGAIN;
+	can_frame_to_ipc(frame, f);
+
+	ret = ipc_service_send(&data->ep, f, sizeof(*f));
+	if (ret != 0) {
+		return ret;
 	}
 
 	return 0;
@@ -219,40 +175,32 @@ static int can_ipc_get_capabilities(const struct device *dev, can_mode_t *cap)
 {
 	ARG_UNUSED(dev);
 
-	*cap = CAN_MODE_NORMAL | CAN_MODE_LOOPBACK;
+	*cap = CAN_MODE_NORMAL;// | CAN_MODE_LOOPBACK;
 
 	return 0;
 }
 
-#define IPC_BOUND_TIMEOUT_IN_MS K_MSEC(500)
-
 static int can_ipc_start(const struct device *dev)
 {
 	struct can_ipc_data *data = dev->data;
-	const struct can_ipc_config *config = dev->config;
-	int err;
+	// const struct can_ipc_config *config = dev->config;
+	// int err;
 
 	if (data->common.started) {
 		return -EALREADY;
 	}
 
-	err = ipc_service_open_instance(config->ipc_instance);
-	if (err && (err != -EALREADY)) {
-		LOG_ERR("Failed to open IPC instance: %d\n", err);
-		return err;
-	}
+	// err = ipc_service_open_instance(config->ipc_instance);
+	// if (err && (err != -EALREADY)) {
+	// 	LOG_ERR("Failed to open IPC instance: %d\n", err);
+	// 	return err;
+	// }
 
-	err = ipc_service_register_endpoint(config->ipc_instance, &data->ep, &config->ipc_ep_cfg);
-	if (err != 0) {
-		LOG_ERR("Failed to register EP: %d", err);
-		return err;
-	}
-
-	err = k_sem_take(&data->bound_sem, IPC_BOUND_TIMEOUT_IN_MS);
-	if (err != 0) {
-		LOG_ERR("Failed to bind EP: %d", err);
-		return err;
-	}
+	// err = ipc_service_register_endpoint(config->ipc_instance, &data->ep, &config->ipc_ep_cfg);
+	// if (err != 0) {
+	// 	LOG_ERR("Failed to register EP: %d", err);
+	// 	return err;
+	// }
 
 	data->common.started = true;
 
@@ -262,28 +210,26 @@ static int can_ipc_start(const struct device *dev)
 static int can_ipc_stop(const struct device *dev)
 {
 	struct can_ipc_data *data = dev->data;
-	const struct can_ipc_config *config = dev->config;
-	int err;
+	// const struct can_ipc_config *config = dev->config;
+	// int err;
 
 	if (!data->common.started) {
 		return -EALREADY;
 	}
 
-	err = ipc_service_deregister_endpoint(&data->ep);
-	if (err != 0) {
-		LOG_ERR("Failed to deregister EP: %d", err);
-		return err;
-	}
+	// err = ipc_service_deregister_endpoint(&data->ep);
+	// if (err != 0) {
+	// 	LOG_ERR("Failed to deregister EP: %d", err);
+	// 	return err;
+	// }
 
-	err = ipc_service_close_instance(config->ipc_instance);
-	if (err != 0) {
-		LOG_ERR("Failed to close IPC instance: %d\n", err);
-		return err;
-	}
+	// err = ipc_service_close_instance(config->ipc_instance);
+	// if (err != 0) {
+	// 	LOG_ERR("Failed to close IPC instance: %d\n", err);
+	// 	return err;
+	// }
 
 	data->common.started = false;
-
-	k_msgq_purge(&data->tx_msgq);
 
 	return 0;
 }
@@ -296,7 +242,8 @@ static int can_ipc_set_mode(const struct device *dev, can_mode_t mode)
 		return -EBUSY;
 	}
 
-	if ((mode & ~(CAN_MODE_LOOPBACK)) != 0) {
+	// if ((mode & ~(CAN_MODE_LOOPBACK)) != 0) {
+	if (mode != CAN_MODE_NORMAL) {
 		LOG_ERR("unsupported mode: 0x%08x", mode);
 		return -ENOTSUP;
 	}
@@ -400,7 +347,8 @@ static DEVICE_API(can, can_ipc_driver_api) = {
 static int can_ipc_init(const struct device *dev)
 {
 	struct can_ipc_data *data = dev->data;
-	k_tid_t tx_tid;
+	const struct can_ipc_config *config = dev->config;
+	int err;
 
 	k_mutex_init(&data->mtx);
 
@@ -408,20 +356,17 @@ static int can_ipc_init(const struct device *dev)
 		data->filters[i].rx_cb = NULL;
 	}
 
-	k_msgq_init(&data->tx_msgq, data->msgq_buffer, sizeof(struct can_ipc_frame),
-		    CONFIG_CAN_IPC_TX_MSGQ_SIZE);
-
-	tx_tid = k_thread_create(&data->tx_thread_data, data->tx_thread_stack,
-				 K_KERNEL_STACK_SIZEOF(data->tx_thread_stack),
-				 tx_thread, (void *)dev, NULL, NULL,
-				 CONFIG_CAN_IPC_TX_THREAD_PRIORITY,
-				 0, K_NO_WAIT);
-	if (!tx_tid) {
-		LOG_ERR("ERROR spawning tx thread");
-		return -1;
+	err = ipc_service_open_instance(config->ipc_instance);
+	if (err && (err != -EALREADY)) {
+		LOG_ERR("Failed to open IPC instance: %d\n", err);
+		return err;
 	}
 
-	k_thread_name_set(tx_tid, dev->name);
+	err = ipc_service_register_endpoint(config->ipc_instance, &data->ep, &config->ipc_ep_cfg);
+	if (err != 0) {
+		LOG_ERR("Failed to register EP: %d", err);
+		return err;
+	}
 
 	return 0;
 }
@@ -429,10 +374,20 @@ static int can_ipc_init(const struct device *dev)
 static void can_ipc_bound(void *priv)
 {
 	const struct device *dev = priv;
-	struct can_ipc_data *ipc = dev->data;
 
 	LOG_WRN("%s: AAAAA: bound", dev->name);
-	k_sem_give(&ipc->bound_sem);
+}
+
+static void can_ipc_unbound(void *priv)
+{
+	const struct device *dev = priv;
+
+	LOG_WRN("%s: AAAAA: unbound", dev->name);
+}
+
+static void can_ipc_error(const char *err, void *priv)
+{
+	LOG_WRN("BBBBB: IPC error %s", err);
 }
 
 static void can_ipc_rx(const void *pkt, size_t len, void *priv)
@@ -443,25 +398,15 @@ static void can_ipc_rx(const void *pkt, size_t len, void *priv)
 	struct can_ipc_proto_frame *f;
 	struct can_ipc_filter *filter;
 
-	// bt_ipc_rx(dev, data, len);
-	LOG_WRN("%s: AAAAA: rx len %d", dev->name, len);
 	if (len != sizeof(struct can_ipc_proto_frame)) {
 		LOG_ERR("Length %d is not equal to expected %d", len, sizeof(struct can_ipc_proto_frame));
 		return;
 	}
 
 	f = (struct can_ipc_proto_frame *)pkt;
+	LOG_WRN("%s: AAAAA: rx id %x", dev->name, f->id);
 
-	frame.id = f->id;
-	frame.dlc = f->dlc;
-	memcpy(frame.data, f->data, sizeof(f->data));
-	frame.flags = 0;
-	if (f->flags & CAN_IPC_FRAME_IDE) {
-		frame.flags |= CAN_FRAME_IDE;
-	}
-	if (f->flags & CAN_IPC_FRAME_RTR) {
-		frame.flags |= CAN_FRAME_RTR;
-	}
+	can_ipc_to_frame(f, &frame);
 
 	k_mutex_lock(&data->mtx, K_FOREVER);
 
@@ -486,15 +431,15 @@ static void can_ipc_rx(const void *pkt, size_t len, void *priv)
 			.name = "can_ipc", \
 			.priv = (void *)(DEVICE_DT_INST_GET(inst)), \
 			.cb = { \
-				.bound = can_ipc_bound, \
+				.bound    = can_ipc_bound, \
+				.unbound  = can_ipc_unbound, \
 				.received = can_ipc_rx, \
+				.error    = can_ipc_error, \
 			}, \
 		}, \
 	};											\
 												\
-	static struct can_ipc_data can_ipc_data_##inst = { \
-		.bound_sem = Z_SEM_INITIALIZER(can_ipc_data_##inst.bound_sem, 0, 1), \
-	};				\
+	static struct can_ipc_data can_ipc_data_##inst; \
 												\
 	CAN_DEVICE_DT_INST_DEFINE(inst, can_ipc_init, NULL,				\
 				  &can_ipc_data_##inst,					\

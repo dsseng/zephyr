@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize(
     'msg',
     [
-        # pytest.param(can.Message(arbitration_id=0x10, is_extended_id=False), id='std_id_dlc_0'),
-        # pytest.param(
-        #     can.Message(arbitration_id=0x20, data=[0xAA, 0xBB, 0xCC, 0xDD], is_extended_id=False),
-        #     id='std_id_dlc_4',
-        # ),
+        pytest.param(can.Message(arbitration_id=0x10, is_extended_id=False), id='std_id_dlc_0'),
+        pytest.param(
+            can.Message(arbitration_id=0x20, data=[0xAA, 0xBB, 0xCC, 0xDD], is_extended_id=False),
+            id='std_id_dlc_4',
+        ),
         pytest.param(
             can.Message(
                 arbitration_id=0x30,
@@ -34,25 +34,25 @@ logger = logging.getLogger(__name__)
             ),
             id='ext_id_dlc_8',
         ),
-        # pytest.param(
-        #     can.Message(
-        #         arbitration_id=0x40,
-        #         data=[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11],
-        #         is_fd=True,
-        #         is_extended_id=False,
-        #     ),
-        #     id='std_id_fdf_dlc_9',
-        # ),
-        # pytest.param(
-        #     can.Message(
-        #         arbitration_id=0x50,
-        #         data=[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11],
-        #         is_fd=True,
-        #         bitrate_switch=True,
-        #         is_extended_id=False,
-        #     ),
-        #     id='std_id_fdf_brs_dlc_9',
-        # ),
+        pytest.param(
+            can.Message(
+                arbitration_id=0x40,
+                data=[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11],
+                is_fd=True,
+                is_extended_id=False,
+            ),
+            id='std_id_fdf_dlc_9',
+        ),
+        pytest.param(
+            can.Message(
+                arbitration_id=0x50,
+                data=[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11],
+                is_fd=True,
+                bitrate_switch=True,
+                is_extended_id=False,
+            ),
+            id='std_id_fdf_brs_dlc_9',
+        ),
     ],
 )
 class TestCanRxTx:
@@ -81,13 +81,13 @@ class TestCanRxTx:
             if can_host.protocol == CanProtocol.CAN_20:
                 pytest.skip('CAN FD not supported by host')
 
-    # def test_dut_to_host(self, can_dut: BusABC, can_host: BusABC, msg: can.Message) -> None:
-    #     """Test DUT to host communication."""
-    #     self.skip_if_unsupported(can_dut, can_host, msg)
+    def test_dut_to_host(self, can_dut: BusABC, can_host: BusABC, msg: can.Message) -> None:
+        """Test DUT to host communication."""
+        self.skip_if_unsupported(can_dut, can_host, msg)
 
-    #     can_dut.send(msg, timeout=TIMEOUT)
-    #     rx = can_host.recv(timeout=TIMEOUT)
-    #     self.check_rx(msg, rx)
+        can_dut.send(msg, timeout=TIMEOUT)
+        rx = can_host.recv(timeout=TIMEOUT)
+        self.check_rx(msg, rx)
 
     def test_host_to_dut(self, can_dut: BusABC, can_host: BusABC, msg: can.Message) -> None:
         """Test host to DUT communication."""
