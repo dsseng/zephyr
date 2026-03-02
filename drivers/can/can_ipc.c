@@ -68,7 +68,7 @@ static int can_ipc_send(const struct device *dev,
 			     void *user_data)
 {
 	struct can_ipc_data *data = dev->data;
-	uint8_t max_dlc = CAN_MAX_DLC;
+	uint8_t max_dlc = 8;
 	struct can_ipc_proto_frame f;
 	int ret;
 
@@ -183,24 +183,10 @@ static int can_ipc_get_capabilities(const struct device *dev, can_mode_t *cap)
 static int can_ipc_start(const struct device *dev)
 {
 	struct can_ipc_data *data = dev->data;
-	// const struct can_ipc_config *config = dev->config;
-	// int err;
 
 	if (data->common.started) {
 		return -EALREADY;
 	}
-
-	// err = ipc_service_open_instance(config->ipc_instance);
-	// if (err && (err != -EALREADY)) {
-	// 	LOG_ERR("Failed to open IPC instance: %d\n", err);
-	// 	return err;
-	// }
-
-	// err = ipc_service_register_endpoint(config->ipc_instance, &data->ep, &config->ipc_ep_cfg);
-	// if (err != 0) {
-	// 	LOG_ERR("Failed to register EP: %d", err);
-	// 	return err;
-	// }
 
 	data->common.started = true;
 
@@ -210,24 +196,10 @@ static int can_ipc_start(const struct device *dev)
 static int can_ipc_stop(const struct device *dev)
 {
 	struct can_ipc_data *data = dev->data;
-	// const struct can_ipc_config *config = dev->config;
-	// int err;
 
 	if (!data->common.started) {
 		return -EALREADY;
 	}
-
-	// err = ipc_service_deregister_endpoint(&data->ep);
-	// if (err != 0) {
-	// 	LOG_ERR("Failed to deregister EP: %d", err);
-	// 	return err;
-	// }
-
-	// err = ipc_service_close_instance(config->ipc_instance);
-	// if (err != 0) {
-	// 	LOG_ERR("Failed to close IPC instance: %d\n", err);
-	// 	return err;
-	// }
 
 	data->common.started = false;
 
@@ -373,23 +345,9 @@ static int can_ipc_init(const struct device *dev)
 	return 0;
 }
 
-static void can_ipc_bound(void *priv)
-{
-	const struct device *dev = priv;
-
-	LOG_WRN("%s: AAAAA: bound", dev->name);
-}
-
-static void can_ipc_unbound(void *priv)
-{
-	const struct device *dev = priv;
-
-	LOG_WRN("%s: AAAAA: unbound", dev->name);
-}
-
 static void can_ipc_error(const char *err, void *priv)
 {
-	LOG_WRN("BBBBB: IPC error %s", err);
+	LOG_ERR("IPC error: %s", err);
 }
 
 static void can_ipc_rx(const void *pkt, size_t len, void *priv)
@@ -422,7 +380,7 @@ static void can_ipc_rx(const void *pkt, size_t len, void *priv)
 		return;
 	}
 
-	LOG_WRN("%s: AAAAA: rx id %x", dev->name, f->id);
+	LOG_DBG("%s received ID %x", dev->name, f->id);
 
 	can_ipc_to_frame(f, &frame);
 
@@ -449,8 +407,6 @@ static void can_ipc_rx(const void *pkt, size_t len, void *priv)
 			.name = "can_ipc", \
 			.priv = (void *)(DEVICE_DT_INST_GET(inst)), \
 			.cb = { \
-				.bound    = can_ipc_bound, \
-				.unbound  = can_ipc_unbound, \
 				.received = can_ipc_rx, \
 				.error    = can_ipc_error, \
 			}, \
