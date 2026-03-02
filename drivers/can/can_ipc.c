@@ -21,12 +21,6 @@
 
 LOG_MODULE_REGISTER(can_ipc, CONFIG_CAN_LOG_LEVEL);
 
-struct can_ipc_frame {
-	struct can_frame frame;
-	can_tx_callback_t cb;
-	void *cb_arg;
-};
-
 struct can_ipc_filter {
 	can_rx_callback_t rx_cb;
 	void *cb_arg;
@@ -45,6 +39,10 @@ struct can_ipc_data {
 	struct k_mutex mtx;
 
 	struct ipc_ept ep;
+
+	/* Ongoing send transaction */
+	can_tx_callback_t cb;
+	void *cb_arg;
 
 	K_KERNEL_STACK_MEMBER(tx_thread_stack,
 		      CONFIG_CAN_IPC_TX_THREAD_STACK_SIZE);
@@ -71,9 +69,13 @@ static int can_ipc_send(const struct device *dev,
 {
 	struct can_ipc_data *data = dev->data;
 	uint8_t max_dlc = CAN_MAX_DLC;
-	struct can_ipc_proto_frame *f;
-	uint32_t size = sizeof(*f);
+	struct can_ipc_proto_frame f;
 	int ret;
+
+	if (data->cb != NULL) {
+		LOG_INF("TX already in progress");
+		return -EAGAIN;
+	}
 
 	LOG_DBG("Sending %d bytes on %s. Id: 0x%x, ID type: %s %s",
 		frame->dlc, dev->name, frame->id,
@@ -94,17 +96,15 @@ static int can_ipc_send(const struct device *dev,
 		return -ENETDOWN;
 	}
 
-	ret = ipc_service_get_tx_buffer(&data->ep, (void **)&f, &size, K_MSEC(100));
-	if (ret != 0) {
+	can_frame_to_ipc(frame, &f);
+
+	ret = ipc_service_send(&data->ep, &f, sizeof(f));
+	if (ret < 0) {
 		return ret;
 	}
 
-	can_frame_to_ipc(frame, f);
-
-	ret = ipc_service_send(&data->ep, f, sizeof(*f));
-	if (ret != 0) {
-		return ret;
-	}
+	data->cb = callback;
+	data->cb_arg = user_data;
 
 	return 0;
 }
@@ -356,6 +356,8 @@ static int can_ipc_init(const struct device *dev)
 		data->filters[i].rx_cb = NULL;
 	}
 
+	data->cb = NULL;
+
 	err = ipc_service_open_instance(config->ipc_instance);
 	if (err && (err != -EALREADY)) {
 		LOG_ERR("Failed to open IPC instance: %d\n", err);
@@ -404,6 +406,22 @@ static void can_ipc_rx(const void *pkt, size_t len, void *priv)
 	}
 
 	f = (struct can_ipc_proto_frame *)pkt;
+
+	// IPC service frames, not real CAN frames
+	if (f->flags & CAN_IPC_FRAME_IPC_SVC) {
+		if (f->id == CAN_IPC_ID_ACK) {
+			if (data->cb == NULL) {
+				LOG_WRN("Stray ACK");
+				return;
+			}
+
+			data->cb(dev, ((int*)f->data)[0], data->cb_arg);
+			data->cb = NULL;
+		}
+
+		return;
+	}
+
 	LOG_WRN("%s: AAAAA: rx id %x", dev->name, f->id);
 
 	can_ipc_to_frame(f, &frame);

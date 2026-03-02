@@ -34,13 +34,26 @@ static void ep_error(const char *err, void *priv)
 
 const struct device *const can_bus = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
 
+static void can_cb(const struct device *dev, int status, void *user_data) {
+	struct can_ipc_proto_frame f;
+	int err;
+
+	f.flags = CAN_IPC_FRAME_IPC_SVC;
+	f.id = CAN_IPC_ID_ACK;
+	((int*)f.data)[0] = status;
+
+	err = ipc_service_send(&ipc_ep, &f, sizeof(f));
+	if (err < 0) {
+		LOG_ERR("Failed to send ACK: %d", err);
+	}
+}
+
 static void ep_rx(const void *data, size_t len, void *priv)
 {
 	struct can_ipc_proto_frame *f;
 	struct can_frame frame;
 	int err;
 
-	LOG_WRN("BBBBB: rx %d", (len > 0 ? ((uint32_t *)data)[0] : 1337));
 	if (len != sizeof(struct can_ipc_proto_frame)) {
 		LOG_ERR("Length %d is not equal to expected %d", len, sizeof(struct can_ipc_proto_frame));
 		return;
@@ -50,7 +63,7 @@ static void ep_rx(const void *data, size_t len, void *priv)
 	LOG_WRN("BBBBB: rx id %x", f->id);
 	can_ipc_to_frame(f, &frame);
 
-	err = can_send(can_bus, &frame, K_MSEC(100), NULL, NULL);
+	err = can_send(can_bus, &frame, K_MSEC(100), can_cb, NULL);
 	if (err != 0) {
 		LOG_ERR("Failed to send to bus: %d", err);
 	}
@@ -87,8 +100,7 @@ void rx_thread(void *arg1, void *arg2, void *arg3)
 		.mask = 0
 	};
 	struct can_frame frame;
-	struct can_ipc_proto_frame *f;
-	uint32_t size = sizeof(*f);
+	struct can_ipc_proto_frame f;
 	int ret;
 
 	can_add_rx_filter_msgq(can_bus, &rx_msgq, &filter);
@@ -101,16 +113,11 @@ void rx_thread(void *arg1, void *arg2, void *arg3)
 
 		LOG_WRN("BBBBB Frame received: %u\n", frame.id);
 
-		ret = ipc_service_get_tx_buffer(&ipc_ep, (void **)&f, &size, K_MSEC(100));
-		if (ret != 0) {
-			LOG_ERR("Error acquiring TX buffer: %d", ret);
-		}
+		can_frame_to_ipc(&frame, &f);
+		LOG_WRN("BBBBB sending id %x", f.id);
 
-		can_frame_to_ipc(&frame, f);
-		LOG_WRN("BBBBB sending id %x", f->id);
-
-		ret = ipc_service_send(&ipc_ep, f, sizeof(*f));
-		if (ret != 0) {
+		ret = ipc_service_send(&ipc_ep, &f, sizeof(f));
+		if (ret < 0) {
 			LOG_ERR("Error sending IPC: %d", ret);
 			continue;
 		}

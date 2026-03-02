@@ -21,6 +21,12 @@
 /** Frame is a Remote Transmission Request (RTR) */
 #define CAN_IPC_FRAME_RTR BIT(1)
 
+/** Frame is a IPC Service-specific frame, further defined by ID */
+#define CAN_IPC_FRAME_IPC_SVC BIT(7)
+
+/** ACK! */
+#define CAN_IPC_ID_ACK 0x41434b21
+
 struct can_ipc_proto_frame {
 	/** Standard (11-bit) or extended (29-bit) CAN identifier. */
 	uint32_t id;
