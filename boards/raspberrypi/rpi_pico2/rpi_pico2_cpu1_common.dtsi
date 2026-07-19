@@ -21,14 +21,7 @@
 		zephyr,flash-controller = &qmi;
 		zephyr,console = &uart1;
 		zephyr,shell-uart = &uart1;
-		zephyr,code-partition = &cpu1_slot0_partition;
-	};
-
-	cpu1-launcher {
-		compatible = "raspberrypi,pico-pcbs";
-		execution-memory = <&sram0_cpu1>;
-		source-memory = <&cpu1_slot0_partition>;
-		status = "okay";
+		// zephyr,code-partition = &sram0_cpu1;
 	};
 };
 
