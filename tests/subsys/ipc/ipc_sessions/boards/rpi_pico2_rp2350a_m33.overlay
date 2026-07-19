@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <raspberrypi/rp2350_amp_sram_partitions.dtsi>
+
 &mbox {
 	status = "okay";
 };
